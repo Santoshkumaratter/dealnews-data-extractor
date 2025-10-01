@@ -267,7 +267,7 @@ def main():
     else:
         # Make sure MySQL pipeline is enabled
         settings.set('ITEM_PIPELINES', {
-            'dealnews_scraper.pipelines.MySQLPipeline': 300,
+            'dealnews_scraper.normalized_pipeline.NormalizedMySQLPipeline': 300,
         })
         logger.info("Using MySQL pipeline")
         
