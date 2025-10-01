@@ -54,4 +54,4 @@ temp/
 tmp/
 
 # HTML snapshots (if enabled)
-exports/html_snapshots/
+exports/*
