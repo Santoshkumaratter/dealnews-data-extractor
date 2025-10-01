@@ -113,6 +113,50 @@ def check_dependencies():
     print("[SUCCESS] All dependencies available")
     return True
 
+def create_database_if_not_exists():
+    """Create database if it doesn't exist"""
+    print("Checking database existence...")
+    
+    try:
+        import mysql.connector
+        
+        mysql_host = os.getenv('MYSQL_HOST', 'localhost')
+        mysql_port = int(os.getenv('MYSQL_PORT', '3306'))
+        mysql_user = os.getenv('MYSQL_USER', 'root')
+        mysql_password = os.getenv('MYSQL_PASSWORD', 'root')
+        mysql_database = os.getenv('MYSQL_DATABASE', 'dealnews')
+        
+        print(f"Connecting to {mysql_host}:{mysql_port} as {mysql_user}...")
+        
+        # Connect without specifying database
+        conn = mysql.connector.connect(
+            host=mysql_host,
+            port=mysql_port,
+            user=mysql_user,
+            password=mysql_password,
+            connection_timeout=10
+        )
+        
+        cursor = conn.cursor()
+        
+        # Create database if it doesn't exist
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {mysql_database}")
+        print(f"[SUCCESS] Database '{mysql_database}' created/verified")
+        
+        cursor.close()
+        conn.close()
+        
+        return True
+        
+    except mysql.connector.Error as e:
+        print(f"[ERROR] Database creation failed: {e}")
+        print("[INFO] Please check your MySQL settings in .env file")
+        print("[INFO] Ensure MySQL server is running and accessible")
+        return False
+    except Exception as e:
+        print(f"[ERROR] Unexpected error creating database: {e}")
+        return False
+
 def test_mysql_connection():
     """Test MySQL connection before starting scraper"""
     print("Testing MySQL connection...")
@@ -171,9 +215,15 @@ def main():
         print("\n[ERROR] Dependency check failed. Exiting.")
         sys.exit(1)
     
-    # Step 3: Test MySQL connection
+    # Step 3: Create database if it doesn't exist
     mysql_enabled = os.getenv('DISABLE_MYSQL', '').lower() not in ('1', 'true', 'yes')
     if mysql_enabled:
+        if not create_database_if_not_exists():
+            print("\n[ERROR] Database creation failed. Exiting.")
+            print("[TIP] Set DISABLE_MYSQL=true in .env to run without database")
+            sys.exit(1)
+        
+        # Step 4: Test MySQL connection
         if not test_mysql_connection():
             print("\n[ERROR] MySQL connection test failed. Exiting.")
             print("[TIP] Set DISABLE_MYSQL=true in .env to run without database")
