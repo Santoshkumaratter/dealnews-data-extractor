@@ -1,0 +1,24 @@
+services:
+  adminer:
+    image: adminer:4.8.1
+    container_name: dealnews_adminer
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+  scraper:
+    build: .
+    container_name: dealnews_scraper
+    network_mode: "host"
+    env_file:
+      - .env
+    environment:
+      - MYSQL_HOST=localhost
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root
+      - MYSQL_DATABASE=dealnews
+    volumes:
+      - ./exports:/app/exports
+    command: ["python", "run.py"]
+    restart: "no"
