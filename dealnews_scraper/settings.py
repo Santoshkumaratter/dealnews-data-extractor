@@ -6,21 +6,21 @@ SPIDER_MODULES = ['dealnews_scraper.spiders']
 NEWSPIDER_MODULE = 'dealnews_scraper.spiders'
 
 ROBOTSTXT_OBEY = False
-# Super fast settings for maximum speed
-DOWNLOAD_DELAY = 0.1
+# Ultra fast settings for maximum speed
+DOWNLOAD_DELAY = 0.05
 AUTOTHROTTLE_ENABLED = False
 AUTOTHROTTLE_START_DELAY = 1
-AUTOTHROTTLE_MAX_DELAY = 5
-AUTOTHROTTLE_TARGET_CONCURRENCY = 2.0
+AUTOTHROTTLE_MAX_DELAY = 3
+AUTOTHROTTLE_TARGET_CONCURRENCY = 3.0
 # Randomize delay between requests
 RANDOMIZE_DOWNLOAD_DELAY = True
 
 # Additional reliability controls
 RETRY_ENABLED = True
 RETRY_TIMES = 6
-DOWNLOAD_TIMEOUT = 15
-CONCURRENT_REQUESTS = 16
-CONCURRENT_REQUESTS_PER_DOMAIN = 8
+DOWNLOAD_TIMEOUT = 10
+CONCURRENT_REQUESTS = 20
+CONCURRENT_REQUESTS_PER_DOMAIN = 10
 
 DOWNLOADER_MIDDLEWARES = {
     # Use custom user-agent rotation inside ProxyMiddleware
