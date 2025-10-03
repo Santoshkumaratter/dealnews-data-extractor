@@ -11,11 +11,21 @@ load_dotenv()
 class ProxyMiddleware:
     def __init__(self):
         self.user_agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Mobile/15E148 Safari/604.1",
-            "Mozilla/5.0 (iPad; CPU OS 16_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/120.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (iPad; CPU OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
         ]
 
         # Optional explicit proxy pool (comma or newline separated)
@@ -37,11 +47,28 @@ class ProxyMiddleware:
     def process_request(self, request, spider):
         # Rotate UA on every request
         request.headers['User-Agent'] = random.choice(self.user_agents)
-        request.headers.setdefault('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8')
+        
+        # Set comprehensive browser-like headers to avoid detection
+        request.headers.setdefault('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7')
         request.headers.setdefault('Accept-Language', 'en-US,en;q=0.9')
+        request.headers.setdefault('Accept-Encoding', 'gzip, deflate, br')
+        request.headers.setdefault('Connection', 'keep-alive')
+        request.headers.setdefault('Upgrade-Insecure-Requests', '1')
+        request.headers.setdefault('Sec-Fetch-Dest', 'document')
+        request.headers.setdefault('Sec-Fetch-Mode', 'navigate')
+        request.headers.setdefault('Sec-Fetch-Site', 'none')
+        request.headers.setdefault('Sec-Fetch-User', '?1')
+        request.headers.setdefault('Cache-Control', 'max-age=0')
+        request.headers.setdefault('DNT', '1')
+        
+        # Add some randomization to avoid pattern detection
+        if random.random() < 0.3:  # 30% chance to add extra headers
+            request.headers.setdefault('Sec-Ch-Ua', '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"')
+            request.headers.setdefault('Sec-Ch-Ua-Mobile', '?0')
+            request.headers.setdefault('Sec-Ch-Ua-Platform', '"Windows"')
 
         # Check if proxy should be disabled (for local testing)
-        if os.getenv('DISABLE_PROXY', '').lower() in ('1', 'true', 'yes'):
+        if os.getenv('DISABLE_PROXY', 'true').lower() in ('1', 'true', 'yes'):
             spider.logger.debug("Proxy disabled for local testing")
             return None
             
@@ -62,10 +89,27 @@ class ProxyMiddleware:
         return request
 
     def process_response(self, request, response, spider):
-        # Handle 429 Too Many Requests by rotating proxy and retrying
+        # Handle various HTTP errors
         if response.status == 429:
             spider.logger.info(f"Received 429 for {request.url}. Rotating proxy and retrying.")
             self._apply_proxy(request, spider, force_rotate=True)
+            request.dont_filter = True
+            return request
+        elif response.status == 403:
+            spider.logger.warning(f"Received 403 for {request.url}. Rotating UA and headers.")
+            # Rotate user agent
+            request.headers['User-Agent'] = random.choice(self.user_agents)
+            # Add additional headers that might help bypass blocks
+            request.headers.setdefault('Referer', 'https://www.google.com/')
+            request.headers.setdefault('X-Forwarded-For', f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}")
+            request.dont_filter = True
+            return request
+        elif response.status == 404:
+            spider.logger.warning(f"Received 404 for {request.url}. Skipping this URL.")
+            # Don't retry 404 errors, just log and continue
+            return response
+        elif response.status == 503:
+            spider.logger.warning(f"Received 503 for {request.url}. Server overloaded, retrying with delay.")
             request.dont_filter = True
             return request
         return response

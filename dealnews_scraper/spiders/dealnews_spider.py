@@ -13,57 +13,45 @@ class DealnewsSpider(scrapy.Spider):
         super().__init__()
         self.deals_extracted = 0
         self.start_time = time.time()
-        self.max_deals = 100000  # Set higher limit for complete extraction
+        self.max_deals = 1000  # Set reasonable limit for testing
     start_urls = [
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
-        "https://www.dealnews.com/cat/Electronics/",
-        "https://www.dealnews.com/cat/Computers/",
-        "https://www.dealnews.com/cat/Home-Garden/",
-        "https://www.dealnews.com/cat/Clothing/",
-        "https://www.dealnews.com/cat/Health-Beauty/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/",
-        "https://www.dealnews.com/cat/Toys-Games/",
-        "https://www.dealnews.com/cat/Automotive/",
-        "https://www.dealnews.com/cat/Books-Movies-Music/",
-        "https://www.dealnews.com/cat/Office-Supplies/",
-        "https://www.dealnews.com/cat/Travel/",
-        "https://www.dealnews.com/cat/Electronics/Computers/",
-        "https://www.dealnews.com/cat/Electronics/Phones/",
-        "https://www.dealnews.com/cat/Electronics/TVs/",
-        "https://www.dealnews.com/cat/Computers/Laptops/",
-        "https://www.dealnews.com/cat/Computers/Desktops/",
-        "https://www.dealnews.com/cat/Home-Garden/Kitchen/",
-        "https://www.dealnews.com/cat/Clothing/Mens/",
-        "https://www.dealnews.com/cat/Clothing/Womens/",
-        "https://www.dealnews.com/cat/Health-Beauty/Personal-Care/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Fitness/",
-        "https://www.dealnews.com/cat/Toys-Games/Video-Games/",
-        "https://www.dealnews.com/cat/Automotive/Auto-Parts/",
-        "https://www.dealnews.com/cat/Books-Movies-Music/Books/",
-        "https://www.dealnews.com/cat/Office-Supplies/Office-Furniture/",
-        "https://www.dealnews.com/cat/Travel/Hotels/",
-        "https://www.dealnews.com/cat/Electronics/Audio/",
-        "https://www.dealnews.com/cat/Electronics/Cameras/",
-        "https://www.dealnews.com/cat/Electronics/Gaming/",
-        "https://www.dealnews.com/cat/Computers/Tablets/",
-        "https://www.dealnews.com/cat/Computers/Software/",
-        "https://www.dealnews.com/cat/Home-Garden/Furniture/",
-        "https://www.dealnews.com/cat/Home-Garden/Appliances/",
-        "https://www.dealnews.com/cat/Clothing/Shoes/",
-        "https://www.dealnews.com/cat/Clothing/Accessories/",
-        "https://www.dealnews.com/cat/Health-Beauty/Skincare/",
-        "https://www.dealnews.com/cat/Health-Beauty/Makeup/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Outdoor/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Team-Sports/",
-        "https://www.dealnews.com/cat/Toys-Games/Board-Games/",
-        "https://www.dealnews.com/cat/Toys-Games/Educational/",
-        "https://www.dealnews.com/cat/Automotive/Car-Care/",
-        "https://www.dealnews.com/cat/Automotive/Interior/",
+        "https://www.dealnews.com/c142/Electronics/",
+        "https://www.dealnews.com/c142/Home-Garden/",
+        "https://www.dealnews.com/c142/Clothing/",
+        "https://www.dealnews.com/c142/Health-Beauty/",
+        "https://www.dealnews.com/c142/Sports-Outdoors/",
+        "https://www.dealnews.com/c142/Toys-Games/",
+        "https://www.dealnews.com/c142/Automotive/",
+        "https://www.dealnews.com/c142/Books-Movies-Music/",
+        "https://www.dealnews.com/c142/Office-Supplies/",
+        "https://www.dealnews.com/c142/Travel/",
+        # Add some popular store pages to get more deals
+        "https://www.dealnews.com/s313/Amazon/",
+        "https://www.dealnews.com/s1/Walmart/",
+        "https://www.dealnews.com/s3/Best-Buy/",
+        "https://www.dealnews.com/s2/Target/",
+        "https://www.dealnews.com/s4/eBay/",
     ]
 
     def parse(self, response):
         self.logger.info(f"Parsing page: {response.url}")
+        
+        # Skip if response status is not 200
+        if response.status != 200:
+            self.logger.warning(f"Skipping page with status {response.status}: {response.url}")
+            return
+            
+        # Check if the response contains error content
+        if any(error_text in response.text.lower() for error_text in ['404 not found', 'page not found', 'error 404', 'not found']):
+            self.logger.warning(f"Page contains 404 error content: {response.url}")
+            return
+            
+        # Check if response is too small (might be an error page)
+        if len(response.text) < 1000:
+            self.logger.warning(f"Response too small, might be error page: {response.url} (size: {len(response.text)})")
+            return
         
         # Check if we've reached the maximum deals
         if self.deals_extracted >= self.max_deals:
@@ -110,7 +98,7 @@ class DealnewsSpider(scrapy.Spider):
                     yield related_item
                     
                     # Request the related deal page to parse full deal data (limit to first 3)
-                    if i < 3:  # Only process first 3 related deals to avoid too many requests
+                    if i < 3 and self.is_valid_dealnews_url(related_url):  # Only process first 3 related deals to avoid too many requests
                         yield scrapy.Request(
                             url=related_url,
                             callback=self.parse_related_deal,
@@ -168,7 +156,7 @@ class DealnewsSpider(scrapy.Spider):
         # Also look for traditional pagination links (limit to 2 pages for speed)
         pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
         for link in pagination_links[:20]:  # Increased to 20 pages for maximum data
-            if link and 'page=' in link:
+            if link and 'page=' in link and self.is_valid_dealnews_url(link):
                 yield response.follow(link, self.parse)
         
         # Look for "Load More" or infinite scroll endpoints (limit to 2 for speed)
@@ -228,6 +216,83 @@ class DealnewsSpider(scrapy.Spider):
             (deal.get('url') or deal.get('deallink')) and
             (deal.get('price') or deal.get('deal') or deal.get('store'))
         )
+    
+    def is_valid_dealnews_url(self, url):
+        """Validate if URL is a valid DealNews URL to avoid 404 errors"""
+        if not url:
+            return False
+        
+        # Check for problematic URL patterns that cause 404s
+        invalid_patterns = [
+            '/cat/',  # Old category URLs that no longer exist
+            'javascript:',
+            'mailto:',
+            '#',
+            'data:',
+            'about:',
+            'chrome-extension:',
+            'moz-extension:',
+            'edge-extension:',
+            'opera-extension:',
+            'safari-extension:',
+            'chrome:',
+            'about:blank',
+            'about:config',
+            'about:addons',
+            'about:preferences',
+            'about:settings',
+            'about:newtab',
+            'about:home',
+            'about:reader',
+            'about:cache',
+            'about:memory',
+            'about:performance',
+            'about:networking',
+            'about:debugging',
+            'about:profiling',
+            'about:logging',
+            'about:telemetry',
+            'about:studies',
+            'about:addons',
+            'about:preferences',
+            'about:settings',
+            'about:newtab',
+            'about:home',
+            'about:reader',
+            'about:cache',
+            'about:memory',
+            'about:performance',
+            'about:networking',
+            'about:debugging',
+            'about:profiling',
+            'about:logging',
+            'about:telemetry',
+            'about:studies',
+        ]
+        
+        for pattern in invalid_patterns:
+            if pattern in url.lower():
+                return False
+        
+        # Only allow dealnews.com URLs
+        if 'dealnews.com' not in url:
+            return False
+            
+        # Check for valid DealNews URL patterns
+        valid_patterns = [
+            'dealnews.com/',
+            'dealnews.com/c142/',
+            'dealnews.com/s',
+            'dealnews.com/online-stores/',
+            'dealnews.com/',
+        ]
+        
+        # Must match at least one valid pattern
+        for pattern in valid_patterns:
+            if pattern in url:
+                return True
+                
+        return False
 
     def extract_deal_from_element(self, element, response):
         deal = {}
@@ -596,7 +661,8 @@ class DealnewsSpider(scrapy.Spider):
             for link in related_links:
                 if link and not link.startswith('#') and len(link) > 10:
                     full_url = urljoin(response.url, link)
-                    if full_url not in related_deals and full_url != deal.get('url', ''):
+                    if (full_url not in related_deals and full_url != deal.get('url', '') and 
+                        self.is_valid_dealnews_url(full_url)):
                         related_deals.append(full_url)
         
         # Strategy 2: If we don't have enough related deals, find similar deals from same category
@@ -606,7 +672,8 @@ class DealnewsSpider(scrapy.Spider):
             for link in category_links[:25]:  # Get up to 25 category links for maximum coverage
                 if link and not link.startswith('#') and len(link) > 10:
                     full_url = urljoin(response.url, link)
-                    if full_url not in related_deals and full_url != deal.get('url', ''):
+                    if (full_url not in related_deals and full_url != deal.get('url', '') and 
+                        self.is_valid_dealnews_url(full_url)):
                         related_deals.append(full_url)
         
         # Strategy 3: If still not enough, find deals from same store
@@ -713,23 +780,23 @@ class DealnewsSpider(scrapy.Spider):
         """Extract category from URL - updated for current DealNews structure"""
         if '/online-stores/' in url:
             return 'stores'
-        elif '/c/electronics/' in url or '/electronics/' in url:
+        elif '/c142/Electronics/' in url or '/electronics/' in url:
             return 'electronics'
-        elif '/c/clothing/' in url or '/clothing/' in url or '/fashion/' in url:
+        elif '/c142/Clothing/' in url or '/clothing/' in url or '/fashion/' in url:
             return 'clothing'
-        elif '/c/home-garden/' in url or '/home/' in url or '/garden/' in url:
+        elif '/c142/Home-Garden/' in url or '/home/' in url or '/garden/' in url:
             return 'home'
-        elif '/c/computers/' in url or '/computers/' in url or '/tech/' in url:
+        elif '/c142/Electronics/Computers/' in url or '/computers/' in url or '/tech/' in url:
             return 'computers'
-        elif '/c/health-beauty/' in url or '/health/' in url or '/beauty/' in url:
+        elif '/c142/Health-Beauty/' in url or '/health/' in url or '/beauty/' in url:
             return 'health'
-        elif '/c/sports-outdoors/' in url or '/sports/' in url or '/outdoors/' in url:
+        elif '/c142/Sports-Outdoors/' in url or '/sports/' in url or '/outdoors/' in url:
             return 'sports'
-        elif '/c/automotive/' in url or '/auto/' in url or '/car/' in url:
+        elif '/c142/Automotive/' in url or '/auto/' in url or '/car/' in url:
             return 'automotive'
-        elif '/c/books-movies-music/' in url or '/books/' in url or '/movies/' in url:
+        elif '/c142/Books-Movies-Music/' in url or '/books/' in url or '/movies/' in url:
             return 'entertainment'
-        elif '/categories/' in url:
+        elif '/c142/' in url:
             return 'categories'
         else:
             return 'general'
