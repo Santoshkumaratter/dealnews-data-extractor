@@ -6,6 +6,10 @@ SPIDER_MODULES = ['dealnews_scraper.spiders']
 NEWSPIDER_MODULE = 'dealnews_scraper.spiders'
 
 ROBOTSTXT_OBEY = False
+
+# Fix Scrapy deprecation warning
+REQUEST_FINGERPRINTER_IMPLEMENTATION = '2.7'
+
 # Balanced settings for reliability and speed - more conservative to avoid blocks
 DOWNLOAD_DELAY = 2.0  # Increased from 1.0 to 2.0 seconds
 AUTOTHROTTLE_ENABLED = True
@@ -28,8 +32,7 @@ DOWNLOADER_MIDDLEWARES = {
     # Enable default user agent middleware
     'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': 400,
     'scrapy.downloadermiddlewares.retry.RetryMiddleware': 550,
-    # Add custom error handling middleware
-    'scrapy.downloadermiddlewares.httperror.HttpErrorMiddleware': 600,
+    # Custom error handling is already built into our ProxyMiddleware
 }
 
 # Add browser-like headers

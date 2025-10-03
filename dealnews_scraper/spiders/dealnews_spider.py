@@ -13,26 +13,66 @@ class DealnewsSpider(scrapy.Spider):
         super().__init__()
         self.deals_extracted = 0
         self.start_time = time.time()
-        self.max_deals = 1000  # Set reasonable limit for testing
+        self.max_deals = 50000  # Extract much more data as requested by client
     start_urls = [
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
+        # Electronics categories
         "https://www.dealnews.com/c142/Electronics/",
+        "https://www.dealnews.com/c142/Electronics/Computers/",
+        "https://www.dealnews.com/c142/Electronics/Phones/",
+        "https://www.dealnews.com/c142/Electronics/TVs/",
+        "https://www.dealnews.com/c142/Electronics/Audio/",
+        "https://www.dealnews.com/c142/Electronics/Cameras/",
+        "https://www.dealnews.com/c142/Electronics/Gaming/",
+        # Home & Garden
         "https://www.dealnews.com/c142/Home-Garden/",
+        "https://www.dealnews.com/c142/Home-Garden/Kitchen/",
+        "https://www.dealnews.com/c142/Home-Garden/Furniture/",
+        "https://www.dealnews.com/c142/Home-Garden/Appliances/",
+        # Clothing
         "https://www.dealnews.com/c142/Clothing/",
+        "https://www.dealnews.com/c142/Clothing/Mens/",
+        "https://www.dealnews.com/c142/Clothing/Womens/",
+        "https://www.dealnews.com/c142/Clothing/Shoes/",
+        "https://www.dealnews.com/c142/Clothing/Accessories/",
+        # Health & Beauty
         "https://www.dealnews.com/c142/Health-Beauty/",
+        "https://www.dealnews.com/c142/Health-Beauty/Personal-Care/",
+        "https://www.dealnews.com/c142/Health-Beauty/Skincare/",
+        "https://www.dealnews.com/c142/Health-Beauty/Makeup/",
+        # Sports & Outdoors
         "https://www.dealnews.com/c142/Sports-Outdoors/",
+        "https://www.dealnews.com/c142/Sports-Outdoors/Fitness/",
+        "https://www.dealnews.com/c142/Sports-Outdoors/Outdoor/",
+        "https://www.dealnews.com/c142/Sports-Outdoors/Team-Sports/",
+        # Toys & Games
         "https://www.dealnews.com/c142/Toys-Games/",
+        "https://www.dealnews.com/c142/Toys-Games/Video-Games/",
+        "https://www.dealnews.com/c142/Toys-Games/Board-Games/",
+        "https://www.dealnews.com/c142/Toys-Games/Educational/",
+        # Other categories
         "https://www.dealnews.com/c142/Automotive/",
         "https://www.dealnews.com/c142/Books-Movies-Music/",
         "https://www.dealnews.com/c142/Office-Supplies/",
         "https://www.dealnews.com/c142/Travel/",
-        # Add some popular store pages to get more deals
+        # Popular stores for much more data
         "https://www.dealnews.com/s313/Amazon/",
         "https://www.dealnews.com/s1/Walmart/",
         "https://www.dealnews.com/s3/Best-Buy/",
         "https://www.dealnews.com/s2/Target/",
         "https://www.dealnews.com/s4/eBay/",
+        "https://www.dealnews.com/s5/Home-Depot/",
+        "https://www.dealnews.com/s6/Macys/",
+        "https://www.dealnews.com/s7/Nike/",
+        "https://www.dealnews.com/s8/adidas/",
+        "https://www.dealnews.com/s9/REI/",
+        "https://www.dealnews.com/s10/Dicks-Sporting-Goods/",
+        "https://www.dealnews.com/s11/Newegg/",
+        "https://www.dealnews.com/s12/Overstock/",
+        "https://www.dealnews.com/s13/Groupon/",
+        "https://www.dealnews.com/s14/Living-Social/",
+        "https://www.dealnews.com/s15/Kohls/",
     ]
 
     def parse(self, response):
@@ -155,13 +195,13 @@ class DealnewsSpider(scrapy.Spider):
         
         # Also look for traditional pagination links (limit to 2 pages for speed)
         pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
-        for link in pagination_links[:20]:  # Increased to 20 pages for maximum data
+        for link in pagination_links[:50]:  # Increased to 50 pages for much more data
             if link and 'page=' in link and self.is_valid_dealnews_url(link):
                 yield response.follow(link, self.parse)
         
         # Look for "Load More" or infinite scroll endpoints (limit to 2 for speed)
         load_more_data = response.css('button[data-url]::attr(data-url)').getall()
-        for data_url in load_more_data[:20]:  # Increased to 20 load more requests for maximum data
+        for data_url in load_more_data[:50]:  # Increased to 50 load more requests for much more data
             if data_url:
                 yield response.follow(data_url, self.parse)
 
@@ -669,7 +709,7 @@ class DealnewsSpider(scrapy.Spider):
         if len(related_deals) < 3:
             # Look for other deals in the same category or similar price range
             category_links = element.css('.chip a::attr(href)').getall()
-            for link in category_links[:25]:  # Get up to 25 category links for maximum coverage
+            for link in category_links[:50]:  # Get up to 50 category links for much more data
                 if link and not link.startswith('#') and len(link) > 10:
                     full_url = urljoin(response.url, link)
                     if (full_url not in related_deals and full_url != deal.get('url', '') and 
@@ -680,7 +720,7 @@ class DealnewsSpider(scrapy.Spider):
         if len(related_deals) < 3:
             # Look for other deals from the same store
             store_links = element.css('a[href*="store"]::attr(href)').getall()
-            for link in store_links[:20]:  # Increased for maximum coverage
+            for link in store_links[:50]:  # Increased for much more data coverage
                 if link and not link.startswith('#') and len(link) > 10:
                     full_url = urljoin(response.url, link)
                     if full_url not in related_deals and full_url != deal.get('url', ''):

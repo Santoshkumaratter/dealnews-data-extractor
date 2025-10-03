@@ -99,6 +99,7 @@ def test_data_saving():
         print(f"   OK: Spider will extract from {len(spider.start_urls)} URLs")
         print(f"   OK: Maximum deals per run: {spider.max_deals:,}")
         print("   OK: Spider will create deals, images, categories, and related deals")
+        print("   OK: Much more data extraction enabled as requested by client")
         
     except Exception as e:
         print(f"   ERROR: Spider test failed: {e}")
@@ -124,11 +125,11 @@ def test_data_saving():
     print("7. Export data to JSON file")
     print()
     print("EXPECTED DATA PER RUN:")
-    print("- 1,000+ main deals with complete information")
-    print("- 3,000+ related deals (3-15 per main deal)")
+    print("- 50,000+ main deals with complete information")
+    print("- 150,000+ related deals (3-15 per main deal)")
     print("- Deal images and categories")
     print("- All filter variables captured")
-    print("- 200+ MB of JSON export data")
+    print("- 500+ MB of JSON export data")
     print()
     print("READY TO SAVE DATA! Run the scraper with:")
     print("  docker-compose up scraper")
