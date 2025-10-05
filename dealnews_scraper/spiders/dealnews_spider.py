@@ -8,6 +8,7 @@ from datetime import datetime
 class DealnewsSpider(scrapy.Spider):
     name = "dealnews"
     allowed_domains = ["dealnews.com"]
+    handle_httpstatus_list = [403, 404]  # Handle these status codes explicitly
     
     def __init__(self):
         super().__init__()
@@ -17,45 +18,45 @@ class DealnewsSpider(scrapy.Spider):
     start_urls = [
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
-        # Electronics categories
-        "https://www.dealnews.com/c142/Electronics/",
-        "https://www.dealnews.com/c142/Electronics/Computers/",
-        "https://www.dealnews.com/c142/Electronics/Phones/",
-        "https://www.dealnews.com/c142/Electronics/TVs/",
-        "https://www.dealnews.com/c142/Electronics/Audio/",
-        "https://www.dealnews.com/c142/Electronics/Cameras/",
-        "https://www.dealnews.com/c142/Electronics/Gaming/",
+        # Electronics categories - using working URLs
+        "https://www.dealnews.com/cat/Electronics/",
+        "https://www.dealnews.com/cat/Electronics/Computers/",
+        "https://www.dealnews.com/cat/Electronics/Phones/",
+        "https://www.dealnews.com/cat/Electronics/TVs/",
+        "https://www.dealnews.com/cat/Electronics/Audio/",
+        "https://www.dealnews.com/cat/Electronics/Cameras/",
+        "https://www.dealnews.com/cat/Electronics/Gaming/",
         # Home & Garden
-        "https://www.dealnews.com/c142/Home-Garden/",
-        "https://www.dealnews.com/c142/Home-Garden/Kitchen/",
-        "https://www.dealnews.com/c142/Home-Garden/Furniture/",
-        "https://www.dealnews.com/c142/Home-Garden/Appliances/",
+        "https://www.dealnews.com/cat/Home-Garden/",
+        "https://www.dealnews.com/cat/Home-Garden/Kitchen/",
+        "https://www.dealnews.com/cat/Home-Garden/Furniture/",
+        "https://www.dealnews.com/cat/Home-Garden/Appliances/",
         # Clothing
-        "https://www.dealnews.com/c142/Clothing/",
-        "https://www.dealnews.com/c142/Clothing/Mens/",
-        "https://www.dealnews.com/c142/Clothing/Womens/",
-        "https://www.dealnews.com/c142/Clothing/Shoes/",
-        "https://www.dealnews.com/c142/Clothing/Accessories/",
+        "https://www.dealnews.com/cat/Clothing/",
+        "https://www.dealnews.com/cat/Clothing/Mens/",
+        "https://www.dealnews.com/cat/Clothing/Womens/",
+        "https://www.dealnews.com/cat/Clothing/Shoes/",
+        "https://www.dealnews.com/cat/Clothing/Accessories/",
         # Health & Beauty
-        "https://www.dealnews.com/c142/Health-Beauty/",
-        "https://www.dealnews.com/c142/Health-Beauty/Personal-Care/",
-        "https://www.dealnews.com/c142/Health-Beauty/Skincare/",
-        "https://www.dealnews.com/c142/Health-Beauty/Makeup/",
+        "https://www.dealnews.com/cat/Health-Beauty/",
+        "https://www.dealnews.com/cat/Health-Beauty/Personal-Care/",
+        "https://www.dealnews.com/cat/Health-Beauty/Skincare/",
+        "https://www.dealnews.com/cat/Health-Beauty/Makeup/",
         # Sports & Outdoors
-        "https://www.dealnews.com/c142/Sports-Outdoors/",
-        "https://www.dealnews.com/c142/Sports-Outdoors/Fitness/",
-        "https://www.dealnews.com/c142/Sports-Outdoors/Outdoor/",
-        "https://www.dealnews.com/c142/Sports-Outdoors/Team-Sports/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/Fitness/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/Outdoor/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/Team-Sports/",
         # Toys & Games
-        "https://www.dealnews.com/c142/Toys-Games/",
-        "https://www.dealnews.com/c142/Toys-Games/Video-Games/",
-        "https://www.dealnews.com/c142/Toys-Games/Board-Games/",
-        "https://www.dealnews.com/c142/Toys-Games/Educational/",
+        "https://www.dealnews.com/cat/Toys-Games/",
+        "https://www.dealnews.com/cat/Toys-Games/Video-Games/",
+        "https://www.dealnews.com/cat/Toys-Games/Board-Games/",
+        "https://www.dealnews.com/cat/Toys-Games/Educational/",
         # Other categories
-        "https://www.dealnews.com/c142/Automotive/",
-        "https://www.dealnews.com/c142/Books-Movies-Music/",
-        "https://www.dealnews.com/c142/Office-Supplies/",
-        "https://www.dealnews.com/c142/Travel/",
+        "https://www.dealnews.com/cat/Automotive/",
+        "https://www.dealnews.com/cat/Books-Movies-Music/",
+        "https://www.dealnews.com/cat/Office-Supplies/",
+        "https://www.dealnews.com/cat/Travel/",
         # Popular stores for much more data
         "https://www.dealnews.com/s313/Amazon/",
         "https://www.dealnews.com/s1/Walmart/",
@@ -78,13 +79,12 @@ class DealnewsSpider(scrapy.Spider):
     def parse(self, response):
         self.logger.info(f"Parsing page: {response.url}")
         
-        # Skip if response status is not 200
-        if response.status != 200:
-            self.logger.warning(f"Skipping page with status {response.status}: {response.url}")
+        # Check for 404/403 status codes or content
+        if response.status in self.handle_httpstatus_list:
+            self.logger.warning(f"Received {response.status} for {response.url}. Skipping this URL.")
             return
             
-        # Check if the response contains error content
-        if any(error_text in response.text.lower() for error_text in ['404 not found', 'page not found', 'error 404', 'not found']):
+        if "404 Not Found" in response.text or "Access Denied" in response.text:
             self.logger.warning(f"Page contains 404 error content: {response.url}")
             return
             
@@ -144,7 +144,8 @@ class DealnewsSpider(scrapy.Spider):
                             callback=self.parse_related_deal,
                             meta={'original_dealid': deal.get('dealid', '')},
                             dont_filter=True,
-                            priority=100  # Lower priority for related deals
+                            priority=100,  # Lower priority for related deals
+                            errback=self.errback_http
                         )
             else:
                 self.logger.warning(f"No related deals found for: {deal.get('title', '')[:50]}")
@@ -197,13 +198,13 @@ class DealnewsSpider(scrapy.Spider):
         pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
         for link in pagination_links[:50]:  # Increased to 50 pages for much more data
             if link and 'page=' in link and self.is_valid_dealnews_url(link):
-                yield response.follow(link, self.parse)
+                yield response.follow(link, self.parse, errback=self.errback_http)
         
         # Look for "Load More" or infinite scroll endpoints (limit to 2 for speed)
         load_more_data = response.css('button[data-url]::attr(data-url)').getall()
         for data_url in load_more_data[:50]:  # Increased to 50 load more requests for much more data
             if data_url:
-                yield response.follow(data_url, self.parse)
+                yield response.follow(data_url, self.parse, errback=self.errback_http)
 
     def extract_deals(self, response):
         deals = []
@@ -264,7 +265,7 @@ class DealnewsSpider(scrapy.Spider):
         
         # Check for problematic URL patterns that cause 404s
         invalid_patterns = [
-            '/cat/',  # Old category URLs that no longer exist
+            '/cat/Computers/Laptops/',  # Specific problematic URL
             'javascript:',
             'mailto:',
             '#',
@@ -293,22 +294,11 @@ class DealnewsSpider(scrapy.Spider):
             'about:logging',
             'about:telemetry',
             'about:studies',
-            'about:addons',
-            'about:preferences',
-            'about:settings',
-            'about:newtab',
-            'about:home',
-            'about:reader',
-            'about:cache',
-            'about:memory',
-            'about:performance',
-            'about:networking',
-            'about:debugging',
-            'about:profiling',
-            'about:logging',
-            'about:telemetry',
-            'about:studies',
         ]
+        
+        # Check for specific problematic URLs
+        if '/cat/Computers/Laptops/' in url:
+            return False
         
         for pattern in invalid_patterns:
             if pattern in url.lower():
@@ -943,3 +933,12 @@ class DealnewsSpider(scrapy.Spider):
             self.logger.warning(f"Database check failed for {deal_url}: {e}")
             # If database check fails, assume it's new to be safe
             return True
+
+    def errback_http(self, failure):
+        """Handle HTTP errors and network failures"""
+        self.logger.error(f"Error processing request: {failure.request.url} - {failure.value}")
+        # Log the specific error type
+        if hasattr(failure.value, 'response'):
+            self.logger.error(f"Response status: {failure.value.response.status}")
+        else:
+            self.logger.error(f"Network error: {failure.value}")
