@@ -45,6 +45,13 @@ class NormalizedMySQLPipeline:
             # Create tables if they don't exist
             self.create_tables_if_not_exist()
             
+            # Check if we should clear existing data
+            clear_data = os.getenv('CLEAR_DATA', 'false').lower() in ('1', 'true', 'yes')
+            if clear_data:
+                spider.logger.info("🔄 CLEAR_DATA=true - Clearing all existing data...")
+                self.clear_all_data()
+                spider.logger.info("✅ All existing data cleared")
+            
             # Initialize counters
             self.deals_saved = 0
             self.related_deals_saved = 0
@@ -265,11 +272,17 @@ class NormalizedMySQLPipeline:
                 spider.logger.warning("Skipping deal without dealid")
                 return item
             
-            # Check if deal already exists
-            self.cursor.execute("SELECT id FROM deals WHERE dealid = %s", (dealid,))
-            if self.cursor.fetchone():
-                spider.logger.info(f"Deal {dealid} already exists, skipping")
-                return item
+            # Check if deal already exists (unless force update is enabled)
+            force_update = os.getenv('FORCE_UPDATE', 'false').lower() in ('1', 'true', 'yes')
+            if not force_update:
+                self.cursor.execute("SELECT id FROM deals WHERE dealid = %s", (dealid,))
+                if self.cursor.fetchone():
+                    spider.logger.info(f"Deal {dealid} already exists, skipping (use FORCE_UPDATE=true to re-scrape)")
+                    return item
+            else:
+                # Force update mode - delete existing deal first
+                self.cursor.execute("DELETE FROM deals WHERE dealid = %s", (dealid,))
+                spider.logger.info(f"Force update mode: Re-scraping deal {dealid}")
             
             # 1. Save to main deals table
             deal_sql = """
@@ -605,3 +618,26 @@ class NormalizedMySQLPipeline:
                 return category
         
         return None
+    
+    def clear_all_data(self):
+        """Clear all existing data from all tables"""
+        try:
+            # Clear all tables in correct order (respecting foreign key constraints)
+            tables_to_clear = [
+                'deal_filters',
+                'deal_categories', 
+                'related_deals',
+                'deal_images',
+                'deals',
+                'stores',
+                'categories',
+                'brands',
+                'collections'
+            ]
+            
+            for table in tables_to_clear:
+                self.cursor.execute(f"DELETE FROM {table}")
+                self.cursor.execute(f"ALTER TABLE {table} AUTO_INCREMENT = 1")
+            
+        except Exception as e:
+            pass  # Ignore errors during clearing
