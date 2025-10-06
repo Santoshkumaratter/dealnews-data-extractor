@@ -1,4 +1,5 @@
 import os
+import time
 import mysql.connector
 import logging
 from dealnews_scraper.items import DealnewsItem, DealImageItem, DealCategoryItem, RelatedDealItem
@@ -35,8 +36,11 @@ class NormalizedMySQLPipeline:
                 password=mysql_password,
                 database=mysql_database,
                 use_pure=True,
-                connection_timeout=30,
-                autocommit=True
+                connection_timeout=60,  # Increased timeout
+                autocommit=True,
+                pool_name='dealnews_pool',
+                pool_size=5,
+                pool_reset_session=True
             )
             
             self.cursor = self.conn.cursor()
@@ -269,25 +273,27 @@ class NormalizedMySQLPipeline:
 
     def process_deal_item(self, item, spider):
         """Process main deal item and save to normalized tables"""
-        try:
-            dealid = item.get('dealid', '')
-            if not dealid:
-                spider.logger.warning("Skipping deal without dealid")
-                return item
-            
-            spider.logger.info(f"Processing deal {dealid}: {item.get('title', '')[:50]}...")
-            
-            # Check if deal already exists (unless force update is enabled)
-            force_update = os.getenv('FORCE_UPDATE', 'false').lower() in ('1', 'true', 'yes')
-            if not force_update:
-                self.cursor.execute("SELECT id FROM deals WHERE dealid = %s", (dealid,))
-                if self.cursor.fetchone():
-                    spider.logger.info(f"Deal {dealid} already exists, skipping (use FORCE_UPDATE=true to re-scrape)")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                dealid = item.get('dealid', '')
+                if not dealid:
+                    spider.logger.warning("Skipping deal without dealid")
                     return item
-            else:
-                # Force update mode - delete existing deal first
-                self.cursor.execute("DELETE FROM deals WHERE dealid = %s", (dealid,))
-                spider.logger.info(f"Force update mode: Re-scraping deal {dealid}")
+                
+                spider.logger.info(f"Processing deal {dealid}: {item.get('title', '')[:50]}...")
+                
+                # Check if deal already exists (unless force update is enabled)
+                force_update = os.getenv('FORCE_UPDATE', 'false').lower() in ('1', 'true', 'yes')
+                if not force_update:
+                    self.cursor.execute("SELECT id FROM deals WHERE dealid = %s", (dealid,))
+                    if self.cursor.fetchone():
+                        spider.logger.info(f"Deal {dealid} already exists, skipping (use FORCE_UPDATE=true to re-scrape)")
+                        return item
+                else:
+                    # Force update mode - delete existing deal first
+                    self.cursor.execute("DELETE FROM deals WHERE dealid = %s", (dealid,))
+                    spider.logger.info(f"Force update mode: Re-scraping deal {dealid}")
             
             # 1. Save to main deals table
             deal_sql = """
@@ -382,12 +388,29 @@ class NormalizedMySQLPipeline:
                     self.save_related_deal(dealid, related_url)
                     self.related_deals_saved += 1
             
-            spider.logger.info(f"✅ Saved deal {dealid} with {len(related_deals)} related deals")
-            
-        except mysql.connector.Error as err:
-            spider.logger.error(f"❌ MySQL error saving deal: {err}")
-        except Exception as e:
-            spider.logger.error(f"❌ Error saving deal: {e}")
+                spider.logger.info(f"✅ Saved deal {dealid} with {len(related_deals)} related deals")
+                break  # Success, exit retry loop
+                
+            except mysql.connector.Error as err:
+                spider.logger.error(f"❌ MySQL error saving deal (attempt {attempt + 1}/{max_retries}): {err}")
+                if attempt < max_retries - 1:
+                    spider.logger.info(f"Retrying in 2 seconds...")
+                    time.sleep(2)
+                    # Try to reconnect
+                    try:
+                        self.conn.reconnect()
+                        self.cursor = self.conn.cursor()
+                    except:
+                        pass
+                else:
+                    spider.logger.error(f"❌ Failed to save deal after {max_retries} attempts")
+            except Exception as e:
+                spider.logger.error(f"❌ Error saving deal (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    spider.logger.info(f"Retrying in 2 seconds...")
+                    time.sleep(2)
+                else:
+                    spider.logger.error(f"❌ Failed to save deal after {max_retries} attempts")
             
         return item
 

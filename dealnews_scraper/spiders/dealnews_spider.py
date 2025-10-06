@@ -16,48 +16,96 @@ class DealnewsSpider(scrapy.Spider):
         self.start_time = time.time()
         self.max_deals = 1000000  # Maximum limit - 1,000,000+ deals for complete data extraction
     start_urls = [
+        # Main pages
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
-        # Electronics categories - using working URLs
+        "https://www.dealnews.com/today/",
+        "https://www.dealnews.com/popular/",
+        "https://www.dealnews.com/trending/",
+        
+        # Electronics categories - comprehensive coverage
         "https://www.dealnews.com/cat/Electronics/",
         "https://www.dealnews.com/cat/Electronics/Computers/",
+        "https://www.dealnews.com/cat/Electronics/Computers/Laptops/",
+        "https://www.dealnews.com/cat/Electronics/Computers/Desktops/",
+        "https://www.dealnews.com/cat/Electronics/Computers/Tablets/",
+        "https://www.dealnews.com/cat/Electronics/Computers/Accessories/",
         "https://www.dealnews.com/cat/Electronics/Phones/",
+        "https://www.dealnews.com/cat/Electronics/Phones/Smartphones/",
+        "https://www.dealnews.com/cat/Electronics/Phones/Accessories/",
         "https://www.dealnews.com/cat/Electronics/TVs/",
+        "https://www.dealnews.com/cat/Electronics/TVs/4K-UHD/",
+        "https://www.dealnews.com/cat/Electronics/TVs/Smart-TVs/",
         "https://www.dealnews.com/cat/Electronics/Audio/",
+        "https://www.dealnews.com/cat/Electronics/Audio/Headphones/",
+        "https://www.dealnews.com/cat/Electronics/Audio/Speakers/",
         "https://www.dealnews.com/cat/Electronics/Cameras/",
+        "https://www.dealnews.com/cat/Electronics/Cameras/DSLR/",
+        "https://www.dealnews.com/cat/Electronics/Cameras/Mirrorless/",
         "https://www.dealnews.com/cat/Electronics/Gaming/",
-        # Home & Garden
+        "https://www.dealnews.com/cat/Electronics/Gaming/Consoles/",
+        "https://www.dealnews.com/cat/Electronics/Gaming/Accessories/",
+        
+        # Home & Garden - comprehensive coverage
         "https://www.dealnews.com/cat/Home-Garden/",
         "https://www.dealnews.com/cat/Home-Garden/Kitchen/",
         "https://www.dealnews.com/cat/Home-Garden/Furniture/",
         "https://www.dealnews.com/cat/Home-Garden/Appliances/",
-        # Clothing
+        "https://www.dealnews.com/cat/Home-Garden/Home-Improvement/",
+        "https://www.dealnews.com/cat/Home-Garden/Outdoor/",
+        "https://www.dealnews.com/cat/Home-Garden/Cleaning/",
+        "https://www.dealnews.com/cat/Home-Garden/Storage/",
+        
+        # Clothing - comprehensive coverage
         "https://www.dealnews.com/cat/Clothing/",
         "https://www.dealnews.com/cat/Clothing/Mens/",
         "https://www.dealnews.com/cat/Clothing/Womens/",
         "https://www.dealnews.com/cat/Clothing/Shoes/",
         "https://www.dealnews.com/cat/Clothing/Accessories/",
-        # Health & Beauty
+        "https://www.dealnews.com/cat/Clothing/Kids/",
+        "https://www.dealnews.com/cat/Clothing/Baby/",
+        "https://www.dealnews.com/cat/Clothing/Jewelry/",
+        "https://www.dealnews.com/cat/Clothing/Watches/",
+        
+        # Health & Beauty - comprehensive coverage
         "https://www.dealnews.com/cat/Health-Beauty/",
         "https://www.dealnews.com/cat/Health-Beauty/Personal-Care/",
         "https://www.dealnews.com/cat/Health-Beauty/Skincare/",
         "https://www.dealnews.com/cat/Health-Beauty/Makeup/",
-        # Sports & Outdoors
+        "https://www.dealnews.com/cat/Health-Beauty/Hair-Care/",
+        "https://www.dealnews.com/cat/Health-Beauty/Vitamins/",
+        "https://www.dealnews.com/cat/Health-Beauty/Fitness/",
+        
+        # Sports & Outdoors - comprehensive coverage
         "https://www.dealnews.com/cat/Sports-Outdoors/",
         "https://www.dealnews.com/cat/Sports-Outdoors/Fitness/",
         "https://www.dealnews.com/cat/Sports-Outdoors/Outdoor/",
         "https://www.dealnews.com/cat/Sports-Outdoors/Team-Sports/",
-        # Toys & Games
+        "https://www.dealnews.com/cat/Sports-Outdoors/Camping/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/Hiking/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/Cycling/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/Running/",
+        
+        # Toys & Games - comprehensive coverage
         "https://www.dealnews.com/cat/Toys-Games/",
         "https://www.dealnews.com/cat/Toys-Games/Video-Games/",
         "https://www.dealnews.com/cat/Toys-Games/Board-Games/",
         "https://www.dealnews.com/cat/Toys-Games/Educational/",
-        # Other categories
+        "https://www.dealnews.com/cat/Toys-Games/Action-Figures/",
+        "https://www.dealnews.com/cat/Toys-Games/Dolls/",
+        "https://www.dealnews.com/cat/Toys-Games/LEGO/",
+        
+        # Other categories - comprehensive coverage
         "https://www.dealnews.com/cat/Automotive/",
         "https://www.dealnews.com/cat/Books-Movies-Music/",
         "https://www.dealnews.com/cat/Office-Supplies/",
         "https://www.dealnews.com/cat/Travel/",
-        # Popular stores for much more data
+        "https://www.dealnews.com/cat/Pet-Supplies/",
+        "https://www.dealnews.com/cat/Baby/",
+        "https://www.dealnews.com/cat/Jewelry/",
+        "https://www.dealnews.com/cat/Watches/",
+        
+        # Popular stores - comprehensive coverage
         "https://www.dealnews.com/s313/Amazon/",
         "https://www.dealnews.com/s1/Walmart/",
         "https://www.dealnews.com/s3/Best-Buy/",
@@ -74,22 +122,6 @@ class DealnewsSpider(scrapy.Spider):
         "https://www.dealnews.com/s13/Groupon/",
         "https://www.dealnews.com/s14/Living-Social/",
         "https://www.dealnews.com/s15/Kohls/",
-        # Additional categories for maximum coverage
-        "https://www.dealnews.com/cat/Electronics/Computers/Laptops/",
-        "https://www.dealnews.com/cat/Electronics/Computers/Desktops/",
-        "https://www.dealnews.com/cat/Electronics/Computers/Tablets/",
-        "https://www.dealnews.com/cat/Electronics/Computers/Accessories/",
-        "https://www.dealnews.com/cat/Electronics/Phones/Smartphones/",
-        "https://www.dealnews.com/cat/Electronics/Phones/Accessories/",
-        "https://www.dealnews.com/cat/Electronics/TVs/4K-UHD/",
-        "https://www.dealnews.com/cat/Electronics/TVs/Smart-TVs/",
-        "https://www.dealnews.com/cat/Electronics/Audio/Headphones/",
-        "https://www.dealnews.com/cat/Electronics/Audio/Speakers/",
-        "https://www.dealnews.com/cat/Electronics/Cameras/DSLR/",
-        "https://www.dealnews.com/cat/Electronics/Cameras/Mirrorless/",
-        "https://www.dealnews.com/cat/Electronics/Gaming/Consoles/",
-        "https://www.dealnews.com/cat/Electronics/Gaming/Accessories/",
-        # More stores for maximum data
         "https://www.dealnews.com/s16/Apple/",
         "https://www.dealnews.com/s17/Samsung/",
         "https://www.dealnews.com/s18/Sony/",
@@ -100,6 +132,33 @@ class DealnewsSpider(scrapy.Spider):
         "https://www.dealnews.com/s23/Dell/",
         "https://www.dealnews.com/s24/Lenovo/",
         "https://www.dealnews.com/s25/Asus/",
+        "https://www.dealnews.com/s26/Costco/",
+        "https://www.dealnews.com/s27/Sams-Club/",
+        "https://www.dealnews.com/s28/BJs/",
+        "https://www.dealnews.com/s29/GameStop/",
+        "https://www.dealnews.com/s30/Staples/",
+        "https://www.dealnews.com/s31/Office-Depot/",
+        "https://www.dealnews.com/s32/Bed-Bath-Beyond/",
+        "https://www.dealnews.com/s33/Williams-Sonoma/",
+        "https://www.dealnews.com/s34/Crate-Barrel/",
+        "https://www.dealnews.com/s35/West-Elm/",
+        
+        # Additional high-traffic categories
+        "https://www.dealnews.com/cat/Electronics/Smart-Home/",
+        "https://www.dealnews.com/cat/Electronics/Wearables/",
+        "https://www.dealnews.com/cat/Electronics/Streaming/",
+        "https://www.dealnews.com/cat/Clothing/Athletic/",
+        "https://www.dealnews.com/cat/Clothing/Work/",
+        "https://www.dealnews.com/cat/Clothing/Formal/",
+        "https://www.dealnews.com/cat/Home-Garden/Bedding/",
+        "https://www.dealnews.com/cat/Home-Garden/Bath/",
+        "https://www.dealnews.com/cat/Home-Garden/Lighting/",
+        "https://www.dealnews.com/cat/Health-Beauty/Supplements/",
+        "https://www.dealnews.com/cat/Health-Beauty/Medical/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/Water-Sports/",
+        "https://www.dealnews.com/cat/Sports-Outdoors/Winter-Sports/",
+        "https://www.dealnews.com/cat/Toys-Games/STEM/",
+        "https://www.dealnews.com/cat/Toys-Games/Arts-Crafts/",
     ]
 
     def parse(self, response):
@@ -191,6 +250,29 @@ class DealnewsSpider(scrapy.Spider):
         """Handle pagination and infinite scroll for DealNews"""
         self.logger.info(f"Handling pagination for: {response.url}")
         
+        # Look for DealNews-specific pagination patterns
+        # DealNews often uses AJAX pagination with specific patterns
+        ajax_pagination_patterns = [
+            'a[href*="page="]',
+            'a[href*="p="]', 
+            'a[href*="offset="]',
+            'a[href*="start="]',
+            '.pagination a',
+            '.pager a',
+            '.page-numbers a',
+            '.pagination-next',
+            '.pagination-prev'
+        ]
+        
+        pagination_found = 0
+        for pattern in ajax_pagination_patterns:
+            pagination_links = response.css(pattern + '::attr(href)').getall()
+            for link in pagination_links[:10]:  # Limit to first 10 pagination links
+                if link and self.is_valid_dealnews_url(link):
+                    self.logger.info(f"Found pagination link: {link}")
+                    yield response.follow(link, self.parse, errback=self.errback_http)
+                    pagination_found += 1
+        
         # Look for "Load More" or "Show More" buttons
         load_more_selectors = [
             'button[class*="load"]',
@@ -226,8 +308,8 @@ class DealnewsSpider(scrapy.Spider):
         # Also look for traditional pagination links - extract ALL pages for maximum data
         pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
         valid_pagination_links = 0
-        for link in pagination_links[:5000]:  # Increased limit - 5000 pages for complete data extraction
-            if link and 'page=' in link and self.is_valid_dealnews_url(link):
+        for link in pagination_links[:100]:  # More reasonable limit to avoid overwhelming the site
+            if link and ('page=' in link or 'p=' in link) and self.is_valid_dealnews_url(link):
                 self.logger.info(f"Found pagination link: {link}")
                 yield response.follow(link, self.parse, errback=self.errback_http)
                 valid_pagination_links += 1
@@ -235,13 +317,13 @@ class DealnewsSpider(scrapy.Spider):
         # Look for "Load More" or infinite scroll endpoints - extract ALL for maximum data
         load_more_data = response.css('button[data-url]::attr(data-url)').getall()
         valid_load_more_data = 0
-        for data_url in load_more_data[:5000]:  # Increased limit - 5000 load more requests for complete data
+        for data_url in load_more_data[:50]:  # More reasonable limit to avoid overwhelming the site
             if data_url:
                 self.logger.info(f"Found load more data: {data_url}")
                 yield response.follow(data_url, self.parse, errback=self.errback_http)
                 valid_load_more_data += 1
         
-        self.logger.info(f"Pagination summary - Load more buttons: {load_more_found}, Pagination links: {valid_pagination_links}, Load more data: {valid_load_more_data}")
+        self.logger.info(f"Pagination summary - AJAX pagination: {pagination_found}, Load more buttons: {load_more_found}, Pagination links: {valid_pagination_links}, Load more data: {valid_load_more_data}")
 
     def extract_deals(self, response):
         deals = []
