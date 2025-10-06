@@ -119,18 +119,14 @@ class DealnewsSpider(scrapy.Spider):
             self.logger.warning(f"Response too small, might be error page: {response.url} (size: {len(response.text)})")
             return
         
-        # Check if we've reached the maximum deals
-        if self.deals_extracted >= self.max_deals:
-            self.logger.info(f"Reached maximum deals limit: {self.max_deals}")
-            return
+        # Log progress but don't stop - continue extracting until no more pages
+        if self.deals_extracted > 0 and self.deals_extracted % 1000 == 0:
+            self.logger.info(f"Progress: {self.deals_extracted} deals extracted so far...")
         
         # Extract deals from current page
         deals = self.extract_deals(response)
         
         for deal in deals:
-            if self.deals_extracted >= self.max_deals:
-                break
-                
             # Create main deal item
             yield self.create_item(deal, response.text)
             self.deals_extracted += 1
@@ -180,9 +176,8 @@ class DealnewsSpider(scrapy.Spider):
         elapsed = time.time() - self.start_time
         self.logger.info(f"Progress: {self.deals_extracted} deals extracted in {elapsed:.1f} seconds")
         
-        # Handle pagination and infinite scroll
-        if self.deals_extracted < self.max_deals:
-            self.handle_pagination(response)
+        # Handle pagination and infinite scroll - always continue until no more pages
+        self.handle_pagination(response)
     
     def closed(self, reason):
         """Called when spider is closed"""
@@ -222,13 +217,13 @@ class DealnewsSpider(scrapy.Spider):
         
         # Also look for traditional pagination links - extract ALL pages for maximum data
         pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
-        for link in pagination_links[:1000]:  # Maximum limit - 1000 pages for complete data extraction
+        for link in pagination_links[:5000]:  # Increased limit - 5000 pages for complete data extraction
             if link and 'page=' in link and self.is_valid_dealnews_url(link):
                 yield response.follow(link, self.parse, errback=self.errback_http)
         
         # Look for "Load More" or infinite scroll endpoints - extract ALL for maximum data
         load_more_data = response.css('button[data-url]::attr(data-url)').getall()
-        for data_url in load_more_data[:1000]:  # Maximum limit - 1000 load more requests for complete data
+        for data_url in load_more_data[:5000]:  # Increased limit - 5000 load more requests for complete data
             if data_url:
                 yield response.follow(data_url, self.parse, errback=self.errback_http)
 
@@ -785,7 +780,7 @@ class DealnewsSpider(scrapy.Spider):
                         if len(related_deals) >= 3:
                             break
         
-        deal['related_deals'] = related_deals[:15]  # Keep up to 15 related deals for maximum coverage
+        deal['related_deals'] = related_deals[:25]  # Keep up to 25 related deals for maximum coverage
         
         # Set defaults for missing fields
         deal.setdefault('dealid', '')

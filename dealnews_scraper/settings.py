@@ -20,8 +20,8 @@ AUTOTHROTTLE_TARGET_CONCURRENCY = 10.0
 RANDOMIZE_DOWNLOAD_DELAY = False  # Disabled for maximum speed
 
 # Maximum speed reliability controls
-RETRY_ENABLED = False  # Disabled for maximum speed
-RETRY_TIMES = 0  # No retries for maximum speed
+RETRY_ENABLED = True  # Enable retries for reliability
+RETRY_TIMES = 3  # Retry failed requests 3 times
 DOWNLOAD_TIMEOUT = 3  # Minimal timeout for maximum speed
 CONCURRENT_REQUESTS = 128  # Maximum concurrent requests for fastest extraction
 CONCURRENT_REQUESTS_PER_DOMAIN = 64  # Maximum domain concurrency for fastest extraction
