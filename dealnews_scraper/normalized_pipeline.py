@@ -294,101 +294,101 @@ class NormalizedMySQLPipeline:
                     # Force update mode - delete existing deal first
                     self.cursor.execute("DELETE FROM deals WHERE dealid = %s", (dealid,))
                     spider.logger.info(f"Force update mode: Re-scraping deal {dealid}")
-            
-            # 1. Save to main deals table
-            deal_sql = """
-            INSERT INTO deals (dealid, recid, url, title, price, promo, deal, dealplus, 
-                             deallink, dealtext, dealhover, published, popularity, staffpick, 
-                             detail, raw_html, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            """
-            
-            deal_values = (
-                dealid,
-                item.get('recid', ''),
-                item.get('url', ''),
-                item.get('title', ''),
-                item.get('price', ''),
-                item.get('promo', ''),
-                item.get('deal', ''),
-                item.get('dealplus', ''),
-                item.get('deallink', ''),
-                item.get('dealtext', ''),
-                item.get('dealhover', ''),
-                item.get('published', ''),
-                item.get('popularity', ''),
-                item.get('staffpick', ''),
-                item.get('detail', ''),
-                item.get('raw_html', '')[:10000] if item.get('raw_html') else ''  # Limit HTML size
-            )
-            
-            self.cursor.execute(deal_sql, deal_values)
-            self.deals_saved += 1
-            spider.logger.info(f"✅ Successfully saved deal {dealid} to database (total saved: {self.deals_saved})")
-            
-            # 2. Save store to stores table (normalized)
-            store_name = item.get('store', '')
-            if store_name:
-                self.save_store(store_name)
-                store_id = self.get_store_id(store_name)
-            else:
-                store_id = None
-            
-            # 3. Save categories to categories table (normalized)
-            categories = item.get('categories', [])
-            if categories:
-                for category in categories:
-                    if isinstance(category, dict):
-                        cat_name = category.get('name', '')
-                        cat_url = category.get('url', '')
-                        cat_title = category.get('title', '')
-                    else:
-                        cat_name = str(category)
-                        cat_url = ''
-                        cat_title = ''
-                    
-                    if cat_name:
-                        self.save_category(cat_name, cat_url, cat_title)
-                        category_id = self.get_category_id(cat_name)
-                        self.save_deal_category(dealid, category_id)
-            
-            # 4. Save brand to brands table (normalized)
-            brand_name = item.get('brand', '')
-            if brand_name:
-                self.save_brand(brand_name)
-                brand_id = self.get_brand_id(brand_name)
-            else:
-                brand_id = None
-            
-            # 5. Save collection to collections table (normalized)
-            collection_name = item.get('collection', '')
-            if collection_name:
-                self.save_collection(collection_name)
-                collection_id = self.get_collection_id(collection_name)
-            else:
-                collection_id = None
-            
-            # 6. Save filter variables to deal_filters table
-            self.save_deal_filters(
-                dealid=dealid,
-                store_id=store_id,
-                brand_id=brand_id,
-                collection_id=collection_id,
-                offer_type=item.get('offer_type', ''),
-                condition_type=item.get('condition', ''),
-                events=item.get('events', ''),
-                offer_status=item.get('offer_status', ''),
-                include_expired=item.get('include_expired', 'No') == 'Yes'
-            )
-            
-            # 7. Save related deals
-            related_deals = item.get('related_deals', [])
-            if related_deals and len(related_deals) >= 3:  # Ensure 3+ related deals
-                for related_url in related_deals[:10]:  # Limit to 10 related deals
-                    self.save_related_deal(dealid, related_url)
-                    self.related_deals_saved += 1
-            
-                spider.logger.info(f"✅ Saved deal {dealid} with {len(related_deals)} related deals")
+                
+                # 1. Save to main deals table
+                deal_sql = """
+                INSERT INTO deals (dealid, recid, url, title, price, promo, deal, dealplus, 
+                                 deallink, dealtext, dealhover, published, popularity, staffpick, 
+                                 detail, raw_html, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                """
+                
+                deal_values = (
+                    dealid,
+                    item.get('recid', ''),
+                    item.get('url', ''),
+                    item.get('title', ''),
+                    item.get('price', ''),
+                    item.get('promo', ''),
+                    item.get('deal', ''),
+                    item.get('dealplus', ''),
+                    item.get('deallink', ''),
+                    item.get('dealtext', ''),
+                    item.get('dealhover', ''),
+                    item.get('published', ''),
+                    item.get('popularity', ''),
+                    item.get('staffpick', ''),
+                    item.get('detail', ''),
+                    item.get('raw_html', '')[:10000] if item.get('raw_html') else ''  # Limit HTML size
+                )
+                
+                self.cursor.execute(deal_sql, deal_values)
+                self.deals_saved += 1
+                spider.logger.info(f"Successfully saved deal {dealid} to database (total saved: {self.deals_saved})")
+                
+                # 2. Save store to stores table (normalized)
+                store_name = item.get('store', '')
+                if store_name:
+                    self.save_store(store_name)
+                    store_id = self.get_store_id(store_name)
+                else:
+                    store_id = None
+                
+                # 3. Save categories to categories table (normalized)
+                categories = item.get('categories', [])
+                if categories:
+                    for category in categories:
+                        if isinstance(category, dict):
+                            cat_name = category.get('name', '')
+                            cat_url = category.get('url', '')
+                            cat_title = category.get('title', '')
+                        else:
+                            cat_name = str(category)
+                            cat_url = ''
+                            cat_title = ''
+                        
+                        if cat_name:
+                            self.save_category(cat_name, cat_url, cat_title)
+                            category_id = self.get_category_id(cat_name)
+                            self.save_deal_category(dealid, category_id)
+                
+                # 4. Save brand to brands table (normalized)
+                brand_name = item.get('brand', '')
+                if brand_name:
+                    self.save_brand(brand_name)
+                    brand_id = self.get_brand_id(brand_name)
+                else:
+                    brand_id = None
+                
+                # 5. Save collection to collections table (normalized)
+                collection_name = item.get('collection', '')
+                if collection_name:
+                    self.save_collection(collection_name)
+                    collection_id = self.get_collection_id(collection_name)
+                else:
+                    collection_id = None
+                
+                # 6. Save filter variables to deal_filters table
+                self.save_deal_filters(
+                    dealid=dealid,
+                    store_id=store_id,
+                    brand_id=brand_id,
+                    collection_id=collection_id,
+                    offer_type=item.get('offer_type', ''),
+                    condition_type=item.get('condition', ''),
+                    events=item.get('events', ''),
+                    offer_status=item.get('offer_status', ''),
+                    include_expired=item.get('include_expired', 'No') == 'Yes'
+                )
+                
+                # 7. Save related deals
+                related_deals = item.get('related_deals', [])
+                if related_deals and len(related_deals) >= 3:  # Ensure 3+ related deals
+                    for related_url in related_deals[:10]:  # Limit to 10 related deals
+                        self.save_related_deal(dealid, related_url)
+                        self.related_deals_saved += 1
+                
+                spider.logger.info(f"Saved deal {dealid} with {len(related_deals)} related deals")
                 break  # Success, exit retry loop
                 
             except mysql.connector.Error as err:
