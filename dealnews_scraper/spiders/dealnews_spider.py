@@ -14,7 +14,7 @@ class DealnewsSpider(scrapy.Spider):
         super().__init__()
         self.deals_extracted = 0
         self.start_time = time.time()
-        self.max_deals = 50000  # Extract much more data as requested by client
+        self.max_deals = 500000  # Maximum limit - 500,000+ deals for complete data extraction
     start_urls = [
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
@@ -74,6 +74,32 @@ class DealnewsSpider(scrapy.Spider):
         "https://www.dealnews.com/s13/Groupon/",
         "https://www.dealnews.com/s14/Living-Social/",
         "https://www.dealnews.com/s15/Kohls/",
+        # Additional categories for maximum coverage
+        "https://www.dealnews.com/cat/Electronics/Computers/Laptops/",
+        "https://www.dealnews.com/cat/Electronics/Computers/Desktops/",
+        "https://www.dealnews.com/cat/Electronics/Computers/Tablets/",
+        "https://www.dealnews.com/cat/Electronics/Computers/Accessories/",
+        "https://www.dealnews.com/cat/Electronics/Phones/Smartphones/",
+        "https://www.dealnews.com/cat/Electronics/Phones/Accessories/",
+        "https://www.dealnews.com/cat/Electronics/TVs/4K-UHD/",
+        "https://www.dealnews.com/cat/Electronics/TVs/Smart-TVs/",
+        "https://www.dealnews.com/cat/Electronics/Audio/Headphones/",
+        "https://www.dealnews.com/cat/Electronics/Audio/Speakers/",
+        "https://www.dealnews.com/cat/Electronics/Cameras/DSLR/",
+        "https://www.dealnews.com/cat/Electronics/Cameras/Mirrorless/",
+        "https://www.dealnews.com/cat/Electronics/Gaming/Consoles/",
+        "https://www.dealnews.com/cat/Electronics/Gaming/Accessories/",
+        # More stores for maximum data
+        "https://www.dealnews.com/s16/Apple/",
+        "https://www.dealnews.com/s17/Samsung/",
+        "https://www.dealnews.com/s18/Sony/",
+        "https://www.dealnews.com/s19/Microsoft/",
+        "https://www.dealnews.com/s20/Google/",
+        "https://www.dealnews.com/s21/LG/",
+        "https://www.dealnews.com/s22/HP/",
+        "https://www.dealnews.com/s23/Dell/",
+        "https://www.dealnews.com/s24/Lenovo/",
+        "https://www.dealnews.com/s25/Asus/",
     ]
 
     def parse(self, response):
@@ -194,15 +220,15 @@ class DealnewsSpider(scrapy.Spider):
                     yield response.follow(data_url, self.parse)
                     break
         
-        # Also look for traditional pagination links (limit to 2 pages for speed)
+        # Also look for traditional pagination links - extract ALL pages for maximum data
         pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
-        for link in pagination_links[:50]:  # Increased to 50 pages for much more data
+        for link in pagination_links[:1000]:  # Maximum limit - 1000 pages for complete data extraction
             if link and 'page=' in link and self.is_valid_dealnews_url(link):
                 yield response.follow(link, self.parse, errback=self.errback_http)
         
-        # Look for "Load More" or infinite scroll endpoints (limit to 2 for speed)
+        # Look for "Load More" or infinite scroll endpoints - extract ALL for maximum data
         load_more_data = response.css('button[data-url]::attr(data-url)').getall()
-        for data_url in load_more_data[:50]:  # Increased to 50 load more requests for much more data
+        for data_url in load_more_data[:1000]:  # Maximum limit - 1000 load more requests for complete data
             if data_url:
                 yield response.follow(data_url, self.parse, errback=self.errback_http)
 

@@ -10,21 +10,21 @@ ROBOTSTXT_OBEY = False
 # Fix Scrapy deprecation warning
 REQUEST_FINGERPRINTER_IMPLEMENTATION = '2.7'
 
-# Balanced settings for reliability and speed - more conservative to avoid blocks
-DOWNLOAD_DELAY = 2.0  # Increased from 1.0 to 2.0 seconds
-AUTOTHROTTLE_ENABLED = True
-AUTOTHROTTLE_START_DELAY = 3  # Increased from 2 to 3 seconds
-AUTOTHROTTLE_MAX_DELAY = 20  # Increased from 15 to 20 seconds
-AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0  # Reduced from 1.5 to 1.0
+# MAXIMUM SPEED settings for fastest possible extraction - client requirements
+DOWNLOAD_DELAY = 0.001  # Maximum speed - 0.001 seconds (1ms) for fastest possible
+AUTOTHROTTLE_ENABLED = False  # Disabled for maximum speed
+AUTOTHROTTLE_START_DELAY = 0.01
+AUTOTHROTTLE_MAX_DELAY = 0.1
+AUTOTHROTTLE_TARGET_CONCURRENCY = 10.0
 # Randomize delay between requests
-RANDOMIZE_DOWNLOAD_DELAY = True
+RANDOMIZE_DOWNLOAD_DELAY = False  # Disabled for maximum speed
 
-# Additional reliability controls
-RETRY_ENABLED = True
-RETRY_TIMES = 3
-DOWNLOAD_TIMEOUT = 30
-CONCURRENT_REQUESTS = 8  # Reduced from 10 to 8
-CONCURRENT_REQUESTS_PER_DOMAIN = 3  # Reduced from 5 to 3
+# Maximum speed reliability controls
+RETRY_ENABLED = False  # Disabled for maximum speed
+RETRY_TIMES = 0  # No retries for maximum speed
+DOWNLOAD_TIMEOUT = 3  # Minimal timeout for maximum speed
+CONCURRENT_REQUESTS = 128  # Maximum concurrent requests for fastest extraction
+CONCURRENT_REQUESTS_PER_DOMAIN = 64  # Maximum domain concurrency for fastest extraction
 
 DOWNLOADER_MIDDLEWARES = {
     # Enable improved custom middleware
