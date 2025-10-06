@@ -252,10 +252,13 @@ class NormalizedMySQLPipeline:
             
         try:
             if isinstance(item, DealnewsItem):
+                spider.logger.info(f"Processing main deal: {item.get('title', '')[:50]}...")
                 return self.process_deal_item(item, spider)
             elif isinstance(item, DealImageItem):
+                spider.logger.info(f"Processing deal image: {item.get('imageurl', '')[:50]}...")
                 return self.process_image_item(item, spider)
             elif isinstance(item, DealCategoryItem):
+                spider.logger.info(f"Processing deal category: {item.get('category_name', '')}")
                 return self.process_category_item(item, spider)
             elif isinstance(item, RelatedDealItem):
                 return self.process_related_deal_item(item, spider)
@@ -271,6 +274,8 @@ class NormalizedMySQLPipeline:
             if not dealid:
                 spider.logger.warning("Skipping deal without dealid")
                 return item
+            
+            spider.logger.info(f"Processing deal {dealid}: {item.get('title', '')[:50]}...")
             
             # Check if deal already exists (unless force update is enabled)
             force_update = os.getenv('FORCE_UPDATE', 'false').lower() in ('1', 'true', 'yes')
@@ -313,6 +318,7 @@ class NormalizedMySQLPipeline:
             
             self.cursor.execute(deal_sql, deal_values)
             self.deals_saved += 1
+            spider.logger.info(f"✅ Successfully saved deal {dealid} to database (total saved: {self.deals_saved})")
             
             # 2. Save store to stores table (normalized)
             store_name = item.get('store', '')

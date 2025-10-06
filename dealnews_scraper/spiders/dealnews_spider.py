@@ -120,11 +120,12 @@ class DealnewsSpider(scrapy.Spider):
             return
         
         # Log progress but don't stop - continue extracting until no more pages
-        if self.deals_extracted > 0 and self.deals_extracted % 1000 == 0:
+        if self.deals_extracted > 0 and self.deals_extracted % 100 == 0:
             self.logger.info(f"Progress: {self.deals_extracted} deals extracted so far...")
         
         # Extract deals from current page
         deals = self.extract_deals(response)
+        self.logger.info(f"Found {len(deals)} deals on page: {response.url}")
         
         for deal in deals:
             # Create main deal item
@@ -188,6 +189,8 @@ class DealnewsSpider(scrapy.Spider):
 
     def handle_pagination(self, response):
         """Handle pagination and infinite scroll for DealNews"""
+        self.logger.info(f"Handling pagination for: {response.url}")
+        
         # Look for "Load More" or "Show More" buttons
         load_more_selectors = [
             'button[class*="load"]',
@@ -200,32 +203,45 @@ class DealnewsSpider(scrapy.Spider):
             '.pager .next'
         ]
         
+        load_more_found = 0
         for selector in load_more_selectors:
             load_more_btn = response.css(selector)
             if load_more_btn:
                 # Try to find the URL for loading more content
                 href = load_more_btn.css('::attr(href)').get()
                 if href:
+                    self.logger.info(f"Found load more link: {href}")
                     yield response.follow(href, self.parse)
+                    load_more_found += 1
                     break
                 
                 # If it's a button, try to find data attributes
                 data_url = load_more_btn.css('::attr(data-url)').get()
                 if data_url:
+                    self.logger.info(f"Found load more data URL: {data_url}")
                     yield response.follow(data_url, self.parse)
+                    load_more_found += 1
                     break
         
         # Also look for traditional pagination links - extract ALL pages for maximum data
         pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
+        valid_pagination_links = 0
         for link in pagination_links[:5000]:  # Increased limit - 5000 pages for complete data extraction
             if link and 'page=' in link and self.is_valid_dealnews_url(link):
+                self.logger.info(f"Found pagination link: {link}")
                 yield response.follow(link, self.parse, errback=self.errback_http)
+                valid_pagination_links += 1
         
         # Look for "Load More" or infinite scroll endpoints - extract ALL for maximum data
         load_more_data = response.css('button[data-url]::attr(data-url)').getall()
+        valid_load_more_data = 0
         for data_url in load_more_data[:5000]:  # Increased limit - 5000 load more requests for complete data
             if data_url:
+                self.logger.info(f"Found load more data: {data_url}")
                 yield response.follow(data_url, self.parse, errback=self.errback_http)
+                valid_load_more_data += 1
+        
+        self.logger.info(f"Pagination summary - Load more buttons: {load_more_found}, Pagination links: {valid_pagination_links}, Load more data: {valid_load_more_data}")
 
     def extract_deals(self, response):
         deals = []
@@ -263,12 +279,17 @@ class DealnewsSpider(scrapy.Spider):
         self.logger.info(f"Found {len(unique_elements)} unique deal elements")
         
         # Process each element
+        valid_deals = 0
+        invalid_deals = 0
         for element in unique_elements:
             deal = self.extract_deal_from_element(element, response)
             if deal and self.is_valid_deal(deal):
                 deals.append(deal)
+                valid_deals += 1
+            else:
+                invalid_deals += 1
         
-        self.logger.info(f"Total deals extracted: {len(deals)}")
+        self.logger.info(f"Deal extraction summary - Valid: {valid_deals}, Invalid: {invalid_deals}, Total: {len(deals)}")
         return deals
 
     def is_valid_deal(self, deal):
@@ -286,10 +307,8 @@ class DealnewsSpider(scrapy.Spider):
         
         # Check for problematic URL patterns that cause 404s
         invalid_patterns = [
-            '/cat/Computers/Laptops/',  # Specific problematic URL
             'javascript:',
             'mailto:',
-            '#',
             'data:',
             'about:',
             'chrome-extension:',
@@ -317,10 +336,6 @@ class DealnewsSpider(scrapy.Spider):
             'about:studies',
         ]
         
-        # Check for specific problematic URLs
-        if '/cat/Computers/Laptops/' in url:
-            return False
-        
         for pattern in invalid_patterns:
             if pattern in url.lower():
                 return False
@@ -329,21 +344,8 @@ class DealnewsSpider(scrapy.Spider):
         if 'dealnews.com' not in url:
             return False
             
-        # Check for valid DealNews URL patterns
-        valid_patterns = [
-            'dealnews.com/',
-            'dealnews.com/c142/',
-            'dealnews.com/s',
-            'dealnews.com/online-stores/',
-            'dealnews.com/',
-        ]
-        
-        # Must match at least one valid pattern
-        for pattern in valid_patterns:
-            if pattern in url:
-                return True
-                
-        return False
+        # Allow all dealnews.com URLs (less restrictive)
+        return True
 
     def extract_deal_from_element(self, element, response):
         deal = {}
