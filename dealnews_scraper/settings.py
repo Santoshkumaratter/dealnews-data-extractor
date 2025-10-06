@@ -63,9 +63,9 @@ USER_AGENT_LIST = [
 # Enable user agent rotation
 RANDOM_UA_PER_DOMAIN = True
 
-# Handle various HTTP responses properly
-HTTPERROR_ALLOWED_CODES = [429, 403, 404, 301, 302, 503]
-RETRY_HTTP_CODES = [500, 503, 504, 408, 429, 403]  # Keep 403 in retry codes
+# Handle various HTTP responses properly - allow more error codes
+HTTPERROR_ALLOWED_CODES = [429, 403, 404, 301, 302, 503, 500]
+RETRY_HTTP_CODES = [500, 503, 504, 408, 429]  # Remove 403 and 404 from retry to avoid loops
 RETRY_PRIORITY_ADJUST = -1
 
 # Custom retry settings for different error types

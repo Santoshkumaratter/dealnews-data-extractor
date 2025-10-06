@@ -506,3 +506,102 @@ class NormalizedMySQLPipeline:
     def process_related_deal_item(self, item, spider):
         """Process related deal item"""
         return item  # Related deals are handled in process_deal_item
+    
+    def close_spider(self, spider):
+        """Close spider and run second pass to populate missing normalized data"""
+        if self.mysql_enabled:
+            try:
+                # Run second pass to populate missing normalized data
+                self.populate_missing_normalized_data(spider)
+                
+                spider.logger.info(f"✅ Final Statistics:")
+                spider.logger.info(f"   Deals saved: {self.deals_saved}")
+                spider.logger.info(f"   Related deals saved: {self.related_deals_saved}")
+                spider.logger.info(f"   Images saved: {self.images_saved}")
+                spider.logger.info(f"   Categories saved: {self.categories_saved}")
+                
+                self.cursor.close()
+                self.conn.close()
+                spider.logger.info("✅ MySQL connection closed")
+            except Exception as e:
+                spider.logger.error(f"❌ Error closing MySQL connection: {e}")
+    
+    def populate_missing_normalized_data(self, spider):
+        """Second pass to populate missing normalized data from existing deals"""
+        try:
+            spider.logger.info("🔄 Running second pass to populate normalized tables...")
+            
+            # Get all deals that need normalized data
+            self.cursor.execute("SELECT dealid, title, url, store FROM deals WHERE store IS NOT NULL AND store != ''")
+            deals = self.cursor.fetchall()
+            
+            stores_populated = 0
+            brands_populated = 0
+            categories_populated = 0
+            
+            for deal in deals:
+                dealid, title, url, store = deal
+                
+                # Populate stores table
+                if store and store != 'Unknown Store':
+                    self.save_store(store)
+                    stores_populated += 1
+                
+                # Extract and populate brand from title
+                brand = self.extract_brand_from_title(title)
+                if brand:
+                    self.save_brand(brand)
+                    brands_populated += 1
+                
+                # Extract and populate category from URL
+                category = self.extract_category_from_url(url)
+                if category:
+                    self.save_category(category, url, category)
+                    categories_populated += 1
+            
+            spider.logger.info(f"✅ Second pass completed:")
+            spider.logger.info(f"   Stores populated: {stores_populated}")
+            spider.logger.info(f"   Brands populated: {brands_populated}")
+            spider.logger.info(f"   Categories populated: {categories_populated}")
+            
+        except Exception as e:
+            spider.logger.error(f"❌ Error in second pass: {e}")
+    
+    def extract_brand_from_title(self, title):
+        """Extract brand from deal title"""
+        if not title:
+            return None
+        
+        # Common brand patterns
+        brand_patterns = [
+            'Apple', 'Samsung', 'Nike', 'Adidas', 'Sony', 'Microsoft', 'Google', 
+            'Amazon', 'Walmart', 'Target', 'Best Buy', 'HP', 'Dell', 'Lenovo',
+            'Canon', 'Nikon', 'Bose', 'JBL', 'LG', 'Panasonic', 'Philips',
+            'Intel', 'AMD', 'NVIDIA', 'ASUS', 'Acer', 'MSI', 'Razer',
+            'Corsair', 'Logitech', 'SteelSeries', 'HyperX', 'Kingston',
+            'Western Digital', 'Seagate', 'SanDisk', 'Crucial'
+        ]
+        
+        title_lower = title.lower()
+        for brand in brand_patterns:
+            if brand.lower() in title_lower:
+                return brand
+        
+        return None
+    
+    def extract_category_from_url(self, url):
+        """Extract category from deal URL"""
+        if not url:
+            return None
+        
+        # Extract category from URL patterns
+        if '/cat/' in url:
+            # Extract category from /cat/Category/Subcategory/ pattern
+            parts = url.split('/cat/')
+            if len(parts) > 1:
+                category_part = parts[1].split('/')[0]
+                # Convert to readable format
+                category = category_part.replace('-', ' ').replace('_', ' ').title()
+                return category
+        
+        return None

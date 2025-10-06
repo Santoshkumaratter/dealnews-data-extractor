@@ -14,7 +14,7 @@ class DealnewsSpider(scrapy.Spider):
         super().__init__()
         self.deals_extracted = 0
         self.start_time = time.time()
-        self.max_deals = 500000  # Maximum limit - 500,000+ deals for complete data extraction
+        self.max_deals = 1000000  # Maximum limit - 1,000,000+ deals for complete data extraction
     start_urls = [
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
