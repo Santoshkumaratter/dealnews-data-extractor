@@ -387,22 +387,25 @@ class DealnewsSpider(scrapy.Spider):
                 '.category-name::text',
                 '.cat::text',
                 '.section::text',
-                '.department::text',
-                # From URL
-                self.extract_category_from_url(response.url)
+                '.department::text'
             ]
             
+            url_category = self.extract_category_from_url(response.url)
+            category_value = ''
             for selector in category_selectors:
-                if isinstance(selector, str):
-                    category = deal.css(selector).get()
-                    if category and category.strip():
-                        item['category'] = category.strip()
-                        break
-                else:
-                    item['category'] = selector
+                category = deal.css(selector).get()
+                if category and category.strip():
+                    category_value = category.strip()
                     break
+            if not category_value and url_category:
+                category_value = url_category
+            item['category'] = category_value
+
+            # Ensure categories list exists for pipeline normalization
+            if item['category']:
+                item['categories'] = [item['category']]
             else:
-                item['category'] = ''
+                item['categories'] = []
             
             # Deal text and other fields
             item['deal'] = deal.css('.deal-text::text').get() or deal.css('.deal-description::text').get() or ''
@@ -417,6 +420,16 @@ class DealnewsSpider(scrapy.Spider):
             item['detail'] = deal.css('.deal-detail::text').get() or deal.css('.details::text').get() or ''
             item['raw_html'] = deal.get()
             
+            # Populate images and related deals on main item for pipeline usage
+            try:
+                item['images'] = [u for u in deal.css('img::attr(src)').getall() if u]
+            except Exception:
+                item['images'] = []
+            try:
+                item['related_deals'] = deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall()
+            except Exception:
+                item['related_deals'] = []
+
             return item
             
         except Exception as e:
@@ -465,18 +478,18 @@ class DealnewsSpider(scrapy.Spider):
             if img_url:
                 image_item = DealImageItem()
                 image_item['dealid'] = item['dealid']
-                image_item['image_url'] = img_url
-                image_item['alt_text'] = deal.css('img::attr(alt)').get() or ''
+                image_item['imageurl'] = img_url
                 yield image_item
 
     def extract_deal_categories(self, deal, item):
         """Extract deal categories"""
-        categories = deal.css('.category, .tag, .label, .breadcrumb').getall()
+        categories = deal.css('.category::text, .tag::text, .label::text, .breadcrumb::text').getall()
         for category in categories:
-            if category.strip():
+            text = category.strip()
+            if text:
                 category_item = DealCategoryItem()
                 category_item['dealid'] = item['dealid']
-                category_item['category'] = category.strip()
+                category_item['category_name'] = text
                 yield category_item
 
     def extract_related_deals(self, deal, item):
@@ -486,7 +499,7 @@ class DealnewsSpider(scrapy.Spider):
             if link:
                 related_item = RelatedDealItem()
                 related_item['dealid'] = item['dealid']
-                related_item['related_url'] = link
+                related_item['relatedurl'] = link
                 yield related_item
 
     def handle_pagination(self, response):
