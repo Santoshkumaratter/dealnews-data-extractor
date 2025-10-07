@@ -15,243 +15,485 @@ class DealnewsSpider(scrapy.Spider):
         self.deals_extracted = 0
         self.start_time = time.time()
         self.max_deals = 1000000  # Maximum limit - 1,000,000+ deals for complete data extraction
+    
+    # ONLY WORKING URLs - NO 404 ERRORS
     start_urls = [
-        # Main pages
+        # Main pages - verified working
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
-        "https://www.dealnews.com/today/",
-        "https://www.dealnews.com/popular/",
-        "https://www.dealnews.com/trending/",
         
-        # Electronics categories - comprehensive coverage
-        "https://www.dealnews.com/cat/Electronics/",
-        "https://www.dealnews.com/cat/Electronics/Computers/",
-        "https://www.dealnews.com/cat/Electronics/Computers/Laptops/",
-        "https://www.dealnews.com/cat/Electronics/Computers/Desktops/",
-        "https://www.dealnews.com/cat/Electronics/Computers/Tablets/",
-        "https://www.dealnews.com/cat/Electronics/Computers/Accessories/",
-        "https://www.dealnews.com/cat/Electronics/Phones/",
-        "https://www.dealnews.com/cat/Electronics/Phones/Smartphones/",
-        "https://www.dealnews.com/cat/Electronics/Phones/Accessories/",
-        "https://www.dealnews.com/cat/Electronics/TVs/",
-        "https://www.dealnews.com/cat/Electronics/TVs/4K-UHD/",
-        "https://www.dealnews.com/cat/Electronics/TVs/Smart-TVs/",
-        "https://www.dealnews.com/cat/Electronics/Audio/",
-        "https://www.dealnews.com/cat/Electronics/Audio/Headphones/",
-        "https://www.dealnews.com/cat/Electronics/Audio/Speakers/",
-        "https://www.dealnews.com/cat/Electronics/Cameras/",
-        "https://www.dealnews.com/cat/Electronics/Cameras/DSLR/",
-        "https://www.dealnews.com/cat/Electronics/Cameras/Mirrorless/",
-        "https://www.dealnews.com/cat/Electronics/Gaming/",
-        "https://www.dealnews.com/cat/Electronics/Gaming/Consoles/",
-        "https://www.dealnews.com/cat/Electronics/Gaming/Accessories/",
+        # Electronics - verified working URLs
+        "https://www.dealnews.com/c142/Electronics/",
+        "https://www.dealnews.com/c142/Electronics/b565/Garmin/",
+        "https://www.dealnews.com/c147/Electronics/Audio-Components/Speakers/",
+        "https://www.dealnews.com/c148/Electronics/Audio-Components/Home-Theater-Systems/",
+        "https://www.dealnews.com/c155/Electronics/Audio-Components/Headphones/",
+        "https://www.dealnews.com/c159/Electronics/TVs/",
+        "https://www.dealnews.com/c159/Electronics/TVs/?r=107%2C110%2C113",
+        "https://www.dealnews.com/c159/Electronics/TVs/?r=116",
+        "https://www.dealnews.com/c159/Electronics/TVs/?r=119%2C122",
+        "https://www.dealnews.com/c159/Electronics/TVs/b1327/Vizio/",
+        "https://www.dealnews.com/c159/Electronics/TVs/b30622/TCL/",
+        "https://www.dealnews.com/c159/Electronics/TVs/f1409/4-K/",
+        "https://www.dealnews.com/c159/Electronics/TVs/f1667/Smart-TV/",
+        "https://www.dealnews.com/c168/Electronics/Cameras/Digital-Cameras/",
+        "https://www.dealnews.com/c171/Electronics/Phones-Cell-Phones/",
+        "https://www.dealnews.com/c189/Gaming-Toys/Computer-Games/PC-Games/",
+        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/",
+        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1158/Play-Station-4/",
+        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1546/Xbox-One/",
+        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1652/Nintendo-Switch/",
+        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1915/Play-Station-5/",
+        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1918/Xbox-Series-S-X/",
+        "https://www.dealnews.com/c299/Electronics/Camcorders/",
+        "https://www.dealnews.com/c306/Electronics/Batteries/",
+        "https://www.dealnews.com/c306/Electronics/Batteries/f1164/AAA/",
+        "https://www.dealnews.com/c306/Electronics/Batteries/f1167/C/",
+        "https://www.dealnews.com/c306/Electronics/Batteries/f1170/D/",
+        "https://www.dealnews.com/c452/Electronics/Streaming-Media-Players/",
+        "https://www.dealnews.com/c491/Electronics/Phones-Cell-Phones/Apple-iPhones/",
+        "https://www.dealnews.com/c671/Electronics/Phones-Cell-Phones/Apple-iPhones/iPhone-Accessories/iPhone-Cases/",
+        "https://www.dealnews.com/c672/Electronics/Phones-Cell-Phones/Android-Phones/",
+        "https://www.dealnews.com/c673/Electronics/Phones-Cell-Phones/Android-Phones/Android-Phone-Accessories/",
+        "https://www.dealnews.com/c837/Electronics/Portable-Speakers/",
+        "https://www.dealnews.com/c914/Electronics/Wearable-Technology/Smart-Watches/",
+        "https://www.dealnews.com/c914/Electronics/Wearable-Technology/Smart-Watches/b13/Apple/",
+        "https://www.dealnews.com/c914/Electronics/Wearable-Technology/Smart-Watches/b28/Samsung/",
+        "https://www.dealnews.com/c917/Electronics/Wearable-Technology/Fitness-Trackers/b36121/Fitbit/",
         
-        # Home & Garden - comprehensive coverage
-        "https://www.dealnews.com/cat/Home-Garden/",
-        "https://www.dealnews.com/cat/Home-Garden/Kitchen/",
-        "https://www.dealnews.com/cat/Home-Garden/Furniture/",
-        "https://www.dealnews.com/cat/Home-Garden/Appliances/",
-        "https://www.dealnews.com/cat/Home-Garden/Home-Improvement/",
-        "https://www.dealnews.com/cat/Home-Garden/Outdoor/",
-        "https://www.dealnews.com/cat/Home-Garden/Cleaning/",
-        "https://www.dealnews.com/cat/Home-Garden/Storage/",
+        # Computers - verified working URLs
+        "https://www.dealnews.com/c39/Computers/",
+        "https://www.dealnews.com/c39/Computers/t2/Coupons/",
+        "https://www.dealnews.com/c41/Computers/Apple-Computers/",
+        "https://www.dealnews.com/c48/Computers/Desktops/",
+        "https://www.dealnews.com/c49/Computers/Laptops/",
+        "https://www.dealnews.com/c49/Computers/Laptops/f15/Core-i5/",
+        "https://www.dealnews.com/c49/Computers/Laptops/f31/Gaming/",
+        "https://www.dealnews.com/c49/Computers/Laptops/s897/Costco/",
+        "https://www.dealnews.com/c56/Computers/Storage/Hard-Drives/",
+        "https://www.dealnews.com/c70/Computers/Peripherals/Input-Devices/",
+        "https://www.dealnews.com/c75/Computers/Peripherals/Monitors/",
+        "https://www.dealnews.com/c93/Computers/Upgrades-Components/",
+        "https://www.dealnews.com/c108/Computers/Storage/Flash-Memory-Cards/",
+        "https://www.dealnews.com/c124/Computers/Software/",
+        "https://www.dealnews.com/c297/Computers/Storage/USB-Flash-Drives/",
+        "https://www.dealnews.com/c572/Computers/iPad-Tablet/iPad-Accessories/",
+        "https://www.dealnews.com/c577/Computers/iPad-Tablet/iPad-Apps/",
+        "https://www.dealnews.com/c623/Computers/iPad-Tablet/Tablet-Accessories/",
+        "https://www.dealnews.com/c732/Computers/Networking/Wireless-Networking/Routers/",
         
-        # Clothing - comprehensive coverage
-        "https://www.dealnews.com/cat/Clothing/",
-        "https://www.dealnews.com/cat/Clothing/Mens/",
-        "https://www.dealnews.com/cat/Clothing/Womens/",
-        "https://www.dealnews.com/cat/Clothing/Shoes/",
-        "https://www.dealnews.com/cat/Clothing/Accessories/",
-        "https://www.dealnews.com/cat/Clothing/Kids/",
-        "https://www.dealnews.com/cat/Clothing/Baby/",
-        "https://www.dealnews.com/cat/Clothing/Jewelry/",
-        "https://www.dealnews.com/cat/Clothing/Watches/",
+        # Home & Garden - verified working URLs
+        "https://www.dealnews.com/c196/Home-Garden/",
+        "https://www.dealnews.com/c196/Home-Garden/t2/Coupons/",
+        "https://www.dealnews.com/c199/Home-Garden/Home-Furniture/",
+        "https://www.dealnews.com/c200/Home-Garden/Decor/",
+        "https://www.dealnews.com/c213/Home-Garden/Food-Drink/",
+        "https://www.dealnews.com/c214/Home-Garden/Food-Drink/Groceries/",
+        "https://www.dealnews.com/c304/Home-Garden/Appliances/",
+        "https://www.dealnews.com/c360/Home-Garden/Bed-Bath/",
+        "https://www.dealnews.com/c377/Home-Garden/Food-Drink/Restaurants/",
+        "https://www.dealnews.com/c529/Home-Garden/Garden/BBQs-Grills/",
+        "https://www.dealnews.com/c607/Home-Garden/Appliances/Household-Items/Air-Conditioners/",
+        "https://www.dealnews.com/c642/Home-Garden/Kitchen/Small-Appliances/",
+        "https://www.dealnews.com/c645/Home-Garden/Tools-Hardware/Hand-Tools/",
+        "https://www.dealnews.com/c646/Home-Garden/Tools-Hardware/Power-Tools/",
+        "https://www.dealnews.com/c647/Home-Garden/Tools-Hardware/Tool-Storage-Organization/",
+        "https://www.dealnews.com/c648/Home-Garden/Tools-Hardware/Flashlights-Lighting/",
+        "https://www.dealnews.com/c661/Home-Garden/Babies-Kids-Items/Diapers-Wipes/",
+        "https://www.dealnews.com/c744/Home-Garden/Garden/Patio-Furniture/",
+        "https://www.dealnews.com/c747/Home-Garden/Garden/Garden-Tools/",
+        "https://www.dealnews.com/c810/Home-Garden/Light-Bulbs/",
         
-        # Health & Beauty - comprehensive coverage
-        "https://www.dealnews.com/cat/Health-Beauty/",
-        "https://www.dealnews.com/cat/Health-Beauty/Personal-Care/",
-        "https://www.dealnews.com/cat/Health-Beauty/Skincare/",
-        "https://www.dealnews.com/cat/Health-Beauty/Makeup/",
-        "https://www.dealnews.com/cat/Health-Beauty/Hair-Care/",
-        "https://www.dealnews.com/cat/Health-Beauty/Vitamins/",
-        "https://www.dealnews.com/cat/Health-Beauty/Fitness/",
+        # Clothing & Accessories - verified working URLs
+        "https://www.dealnews.com/c202/Clothing-Accessories/",
+        "https://www.dealnews.com/c202/Clothing-Accessories/f1/Mens/",
+        "https://www.dealnews.com/c202/Clothing-Accessories/f2/Womens/",
+        "https://www.dealnews.com/c202/Clothing-Accessories/f5/Girls/",
+        "https://www.dealnews.com/c202/Clothing-Accessories/t2/Coupons/",
+        "https://www.dealnews.com/c227/Clothing-Accessories/Jewelry/",
+        "https://www.dealnews.com/c280/Clothing-Accessories/Shoes/f1/Mens/f1107/Sandals/",
+        "https://www.dealnews.com/c280/Clothing-Accessories/Shoes/f2/Womens/",
+        "https://www.dealnews.com/c287/Clothing-Accessories/Luggage-Travel-Gear/",
+        "https://www.dealnews.com/c436/Clothing-Accessories/Accessories/Watches/",
+        "https://www.dealnews.com/c454/Clothing-Accessories/Accessories/Sunglasses/",
+        "https://www.dealnews.com/c454/Clothing-Accessories/Accessories/Sunglasses/f1/Mens/",
+        "https://www.dealnews.com/c481/Clothing-Accessories/Accessories/Handbags/",
+        "https://www.dealnews.com/c487/Clothing-Accessories/Activewear/",
+        "https://www.dealnews.com/c487/Clothing-Accessories/Activewear/f2/Womens/",
+        "https://www.dealnews.com/c488/Clothing-Accessories/Intimates/f2/Womens/",
+        "https://www.dealnews.com/c489/Clothing-Accessories/Coats/",
+        "https://www.dealnews.com/c489/Clothing-Accessories/Coats/f1/Mens/",
+        "https://www.dealnews.com/c490/Clothing-Accessories/Dresses/f2/Womens/",
+        "https://www.dealnews.com/c515/Clothing-Accessories/Jeans/",
+        "https://www.dealnews.com/c716/Clothing-Accessories/Shirts/f1/Mens/",
+        "https://www.dealnews.com/c716/Clothing-Accessories/Shirts/f2/Womens/",
+        "https://www.dealnews.com/c717/Clothing-Accessories/Shorts/f1/Mens/",
+        "https://www.dealnews.com/c717/Clothing-Accessories/Shorts/f2/Womens/",
+        "https://www.dealnews.com/c721/Clothing-Accessories/T-Shirts/f1/Mens/",
+        "https://www.dealnews.com/c851/Clothing-Accessories/Luggage-Travel-Gear/Backpacks/",
+        "https://www.dealnews.com/c866/Clothing-Accessories/Sweatshirts-Hoodies/",
         
-        # Sports & Outdoors - comprehensive coverage
-        "https://www.dealnews.com/cat/Sports-Outdoors/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Fitness/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Outdoor/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Team-Sports/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Camping/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Hiking/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Cycling/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Running/",
+        # Travel & Entertainment - verified working URLs
+        "https://www.dealnews.com/c206/Travel-Entertainment/",
+        "https://www.dealnews.com/c206/Travel-Entertainment/f1069/Caribbean/",
+        "https://www.dealnews.com/c206/Travel-Entertainment/s857/Sams-Club/",
+        "https://www.dealnews.com/c207/Travel-Entertainment/Airfare/",
+        "https://www.dealnews.com/c629/Travel-Entertainment/Cruises/",
         
-        # Toys & Games - comprehensive coverage
-        "https://www.dealnews.com/cat/Toys-Games/",
-        "https://www.dealnews.com/cat/Toys-Games/Video-Games/",
-        "https://www.dealnews.com/cat/Toys-Games/Board-Games/",
-        "https://www.dealnews.com/cat/Toys-Games/Educational/",
-        "https://www.dealnews.com/cat/Toys-Games/Action-Figures/",
-        "https://www.dealnews.com/cat/Toys-Games/Dolls/",
-        "https://www.dealnews.com/cat/Toys-Games/LEGO/",
+        # Health & Beauty - verified working URLs
+        "https://www.dealnews.com/c798/Health-Beauty/Health/Supplements/",
         
-        # Other categories - comprehensive coverage
-        "https://www.dealnews.com/cat/Automotive/",
-        "https://www.dealnews.com/cat/Books-Movies-Music/",
-        "https://www.dealnews.com/cat/Office-Supplies/",
-        "https://www.dealnews.com/cat/Travel/",
-        "https://www.dealnews.com/cat/Pet-Supplies/",
-        "https://www.dealnews.com/cat/Baby/",
-        "https://www.dealnews.com/cat/Jewelry/",
-        "https://www.dealnews.com/cat/Watches/",
+        # Financial Services - verified working URLs
+        "https://www.dealnews.com/c522/Financial-Services/Credit-Cards/",
         
-        # Popular stores - comprehensive coverage
+        # Popular stores - verified working URLs
         "https://www.dealnews.com/s313/Amazon/",
-        "https://www.dealnews.com/s1/Walmart/",
-        "https://www.dealnews.com/s3/Best-Buy/",
-        "https://www.dealnews.com/s2/Target/",
-        "https://www.dealnews.com/s4/eBay/",
-        "https://www.dealnews.com/s5/Home-Depot/",
-        "https://www.dealnews.com/s6/Macys/",
-        "https://www.dealnews.com/s7/Nike/",
-        "https://www.dealnews.com/s8/adidas/",
-        "https://www.dealnews.com/s9/REI/",
-        "https://www.dealnews.com/s10/Dicks-Sporting-Goods/",
-        "https://www.dealnews.com/s11/Newegg/",
-        "https://www.dealnews.com/s12/Overstock/",
-        "https://www.dealnews.com/s13/Groupon/",
-        "https://www.dealnews.com/s14/Living-Social/",
-        "https://www.dealnews.com/s15/Kohls/",
-        "https://www.dealnews.com/s16/Apple/",
-        "https://www.dealnews.com/s17/Samsung/",
-        "https://www.dealnews.com/s18/Sony/",
-        "https://www.dealnews.com/s19/Microsoft/",
-        "https://www.dealnews.com/s20/Google/",
-        "https://www.dealnews.com/s21/LG/",
-        "https://www.dealnews.com/s22/HP/",
-        "https://www.dealnews.com/s23/Dell/",
-        "https://www.dealnews.com/s24/Lenovo/",
-        "https://www.dealnews.com/s25/Asus/",
-        "https://www.dealnews.com/s26/Costco/",
-        "https://www.dealnews.com/s27/Sams-Club/",
-        "https://www.dealnews.com/s28/BJs/",
-        "https://www.dealnews.com/s29/GameStop/",
-        "https://www.dealnews.com/s30/Staples/",
-        "https://www.dealnews.com/s31/Office-Depot/",
-        "https://www.dealnews.com/s32/Bed-Bath-Beyond/",
-        "https://www.dealnews.com/s33/Williams-Sonoma/",
-        "https://www.dealnews.com/s34/Crate-Barrel/",
-        "https://www.dealnews.com/s35/West-Elm/",
-        
-        # Additional high-traffic categories
-        "https://www.dealnews.com/cat/Electronics/Smart-Home/",
-        "https://www.dealnews.com/cat/Electronics/Wearables/",
-        "https://www.dealnews.com/cat/Electronics/Streaming/",
-        "https://www.dealnews.com/cat/Clothing/Athletic/",
-        "https://www.dealnews.com/cat/Clothing/Work/",
-        "https://www.dealnews.com/cat/Clothing/Formal/",
-        "https://www.dealnews.com/cat/Home-Garden/Bedding/",
-        "https://www.dealnews.com/cat/Home-Garden/Bath/",
-        "https://www.dealnews.com/cat/Home-Garden/Lighting/",
-        "https://www.dealnews.com/cat/Health-Beauty/Supplements/",
-        "https://www.dealnews.com/cat/Health-Beauty/Medical/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Water-Sports/",
-        "https://www.dealnews.com/cat/Sports-Outdoors/Winter-Sports/",
-        "https://www.dealnews.com/cat/Toys-Games/STEM/",
-        "https://www.dealnews.com/cat/Toys-Games/Arts-Crafts/",
+        "https://www.dealnews.com/s1186/Nike/",
+        "https://www.dealnews.com/s1669/Verizon-Fios/",
+        "https://www.dealnews.com/s1764/Verizon/",
+        "https://www.dealnews.com/s42512/lululemon/",
     ]
 
-    def parse(self, response):
-        self.logger.info(f"Parsing page: {response.url}")
-        
-        # Check for 404/403 status codes or content
-        if response.status in self.handle_httpstatus_list:
-            self.logger.warning(f"Received {response.status} for {response.url}. Skipping this URL.")
-            return
-            
-        if "404 Not Found" in response.text or "Access Denied" in response.text:
-            self.logger.warning(f"Page contains 404 error content: {response.url}")
-            return
-            
-        # Check if response is too small (might be an error page)
-        if len(response.text) < 1000:
-            self.logger.warning(f"Response too small, might be error page: {response.url} (size: {len(response.text)})")
-            return
-        
-        # Log progress but don't stop - continue extracting until no more pages
-        if self.deals_extracted > 0 and self.deals_extracted % 100 == 0:
-            self.logger.info(f"Progress: {self.deals_extracted} deals extracted so far...")
-        
-        # Extract deals from current page
-        deals = self.extract_deals(response)
-        self.logger.info(f"Found {len(deals)} deals on page: {response.url}")
-        
-        for deal in deals:
-            # Create main deal item
-            yield self.create_item(deal, response.text)
-            self.deals_extracted += 1
-            
-            # Create image items if images found
-            if deal.get('images'):
-                for image_url in deal['images']:
-                    image_item = DealImageItem()
-                    image_item['dealid'] = deal.get('dealid', '')
-                    image_item['imageurl'] = image_url
-                    yield image_item
-            
-            # Create category items if categories found
-            if deal.get('categories'):
-                for category in deal['categories']:
-                    category_item = DealCategoryItem()
-                    category_item['dealid'] = deal.get('dealid', '')
-                    category_item['category_name'] = category.get('name', '')
-                    category_item['category_url'] = category.get('url', '')
-                    category_item['category_title'] = category.get('title', '')
-                    yield category_item
-            
-            # Process related deals - ensure we have 3+ per deal
-            if deal.get('related_deals'):
-                self.logger.info(f"Processing {len(deal['related_deals'])} related deals for: {deal.get('title', '')[:50]}")
-                for i, related_url in enumerate(deal['related_deals']):
-                    # Create related deal item for tracking
-                    related_item = RelatedDealItem()
-                    related_item['dealid'] = deal.get('dealid', '') or f"deal_{hash(deal.get('url', ''))}"
-                    related_item['relatedurl'] = related_url
-                    yield related_item
-                    
-                    # Request the related deal page to parse full deal data (limit to first 3)
-                    if i < 3 and self.is_valid_dealnews_url(related_url):  # Only process first 3 related deals to avoid too many requests
-                        yield scrapy.Request(
-                            url=related_url,
-                            callback=self.parse_related_deal,
-                            meta={'original_dealid': deal.get('dealid', '')},
-                            dont_filter=True,
-                            priority=100,  # Lower priority for related deals
-                            errback=self.errback_http
-                        )
-            else:
-                self.logger.warning(f"No related deals found for: {deal.get('title', '')[:50]}")
+    def start_requests(self):
+        """Start requests with proper error handling"""
+        for url in self.start_urls:
+            yield scrapy.Request(
+                url=url,
+                callback=self.parse,
+                errback=self.errback_http,
+                meta={'dont_cache': True}
+            )
 
-        # Log progress
-        elapsed = time.time() - self.start_time
-        self.logger.info(f"Progress: {self.deals_extracted} deals extracted in {elapsed:.1f} seconds")
+    def errback_http(self, failure):
+        """Handle HTTP errors"""
+        self.logger.error(f"Request failed: {failure.request.url} - {failure.value}")
+
+    def parse(self, response):
+        """Main parsing method with IMPROVED DEAL EXTRACTION"""
+        if response.status == 404:
+            self.logger.warning(f"404 error for URL: {response.url}")
+            return
         
-        # Handle pagination and infinite scroll - always continue until no more pages
-        self.handle_pagination(response)
+        if response.status == 403:
+            self.logger.warning(f"403 error for URL: {response.url}")
+            return
+        
+        self.logger.info(f"Parsing: {response.url}")
+        
+        # IMPROVED DEAL EXTRACTION - Multiple selectors for maximum coverage
+        deals = []
+        
+        # Try multiple deal selectors to find ALL deals on the page
+        deal_selectors = [
+            # DealNews specific selectors
+            '.deal-item',
+            '.deal',
+            '.deal-card', 
+            '.deal-tile',
+            '.deal-container',
+            '.deal-wrapper',
+            '[data-deal-id]',
+            '[data-rec-id]',
+            '.deal-box',
+            '.deal-content',
+            '.deal-info',
+            '.deal-listing',
+            '.deal-post',
+            '.deal-entry',
+            '.deal-row',
+            '.deal-block',
+            # Generic selectors
+            '.item',
+            '.product',
+            '.listing',
+            '.post',
+            '.entry',
+            '.row',
+            '.block',
+            # Link-based selectors
+            'a[href*="/deals/"]',
+            'a[href*="/deal/"]',
+            'a[href*="dealnews.com"]',
+            # Article-based selectors
+            'article',
+            '.article',
+            '.content-item',
+            '.feed-item',
+            '.stream-item'
+        ]
+        
+        for selector in deal_selectors:
+            found_deals = response.css(selector)
+            if found_deals:
+                self.logger.info(f"Found {len(found_deals)} deals with selector: {selector}")
+                deals.extend(found_deals)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_deals = []
+        for deal in deals:
+            deal_html = deal.get()
+            if deal_html not in seen:
+                seen.add(deal_html)
+                unique_deals.append(deal)
+        
+        self.logger.info(f"Total unique deals found on {response.url}: {len(unique_deals)}")
+        
+        for deal in unique_deals:
+            if self.deals_extracted >= self.max_deals:
+                self.logger.info(f"Reached maximum deals limit: {self.max_deals}")
+                return
+            
+            item = self.extract_deal_item(deal, response)
+            if item:
+                self.deals_extracted += 1
+                yield item
+                
+                # Extract related data
+                yield from self.extract_deal_images(deal, item)
+                yield from self.extract_deal_categories(deal, item)
+                yield from self.extract_related_deals(deal, item)
+        
+        # Handle pagination
+        yield from self.handle_pagination(response)
+        
+        # Log progress
+        elapsed_time = time.time() - self.start_time
+        rate = self.deals_extracted / elapsed_time if elapsed_time > 0 else 0
+        self.logger.info(f"Progress: {self.deals_extracted} deals extracted in {elapsed_time:.1f}s (rate: {rate:.1f} deals/sec)")
+
+    def extract_deal_item(self, deal, response):
+        """Extract main deal item with IMPROVED SELECTORS"""
+        try:
+            item = DealnewsItem()
+            
+            # Basic deal information
+            item['dealid'] = deal.css('::attr(data-deal-id)').get() or deal.css('::attr(id)').get() or f"deal_{hash(deal.get())}"
+            item['recid'] = deal.css('::attr(data-rec-id)').get() or ''
+            item['url'] = response.url
+            
+            # IMPROVED Title extraction with DealNews-specific selectors
+            title_selectors = [
+                # DealNews specific
+                '.deal-title::text',
+                '.deal-name::text',
+                '.deal-headline::text',
+                '.deal-text::text',
+                '.deal-description::text',
+                '.deal-summary::text',
+                # Generic
+                '.title::text', 
+                'h1::text',
+                'h2::text',
+                'h3::text',
+                'h4::text',
+                'h5::text',
+                'h6::text',
+                '.product-title::text',
+                '.item-title::text',
+                '.listing-title::text',
+                '.post-title::text',
+                '.entry-title::text',
+                # Link text
+                'a::text',
+                '.link::text',
+                # Other possibilities
+                '.name::text',
+                '.headline::text',
+                '.text::text',
+                '.description::text',
+                '.summary::text',
+                '.content::text'
+            ]
+            
+            for selector in title_selectors:
+                title = deal.css(selector).get()
+                if title and title.strip() and len(title.strip()) > 5:
+                    item['title'] = title.strip()
+                    break
+            else:
+                item['title'] = 'No title found'
+            
+            # IMPROVED Price extraction
+            price_selectors = [
+                # DealNews specific
+                '.deal-price::text',
+                '.price::text',
+                '.sale-price::text',
+                '.current-price::text',
+                '.deal-amount::text',
+                '.deal-cost::text',
+                # Generic
+                '.price-amount::text',
+                '.price-value::text',
+                '.cost::text',
+                '.amount::text',
+                '.value::text',
+                # With spans
+                'span[class*="price"]::text',
+                'span[class*="cost"]::text',
+                'span[class*="amount"]::text',
+                # With divs
+                'div[class*="price"]::text',
+                'div[class*="cost"]::text',
+                'div[class*="amount"]::text'
+            ]
+            
+            for selector in price_selectors:
+                price = deal.css(selector).get()
+                if price and ('$' in price or 'USD' in price or 'price' in price.lower()):
+                    item['price'] = price.strip()
+                    break
+            else:
+                item['price'] = ''
+            
+            # IMPROVED Store extraction
+            store_selectors = [
+                # DealNews specific
+                '.store::text',
+                '.merchant::text',
+                '.retailer::text',
+                '.vendor::text',
+                '.deal-store::text',
+                '.deal-merchant::text',
+                # Generic
+                '.store-name::text',
+                '.merchant-name::text',
+                '.retailer-name::text',
+                '.vendor-name::text',
+                # With spans
+                'span[class*="store"]::text',
+                'span[class*="merchant"]::text',
+                'span[class*="retailer"]::text',
+                'span[class*="vendor"]::text'
+            ]
+            
+            for selector in store_selectors:
+                store = deal.css(selector).get()
+                if store and store.strip():
+                    item['store'] = store.strip()
+                    break
+            else:
+                item['store'] = ''
+            
+            # IMPROVED Category extraction
+            category_selectors = [
+                # DealNews specific
+                '.category::text',
+                '.deal-category::text',
+                '.breadcrumb::text',
+                '.deal-breadcrumb::text',
+                # Generic
+                '.category-name::text',
+                '.cat::text',
+                '.section::text',
+                '.department::text',
+                # From URL
+                self.extract_category_from_url(response.url)
+            ]
+            
+            for selector in category_selectors:
+                if isinstance(selector, str):
+                    category = deal.css(selector).get()
+                    if category and category.strip():
+                        item['category'] = category.strip()
+                        break
+                else:
+                    item['category'] = selector
+                    break
+            else:
+                item['category'] = ''
+            
+            # Deal text and other fields
+            item['deal'] = deal.css('.deal-text::text').get() or deal.css('.deal-description::text').get() or ''
+            item['dealplus'] = deal.css('.deal-plus::text').get() or ''
+            item['promo'] = deal.css('.promo::text').get() or deal.css('.promotion::text').get() or ''
+            item['deallink'] = deal.css('a::attr(href)').get() or ''
+            item['dealtext'] = deal.css('.deal-description::text').get() or deal.css('.deal-summary::text').get() or ''
+            item['dealhover'] = deal.css('::attr(title)').get() or ''
+            item['published'] = deal.css('.published::text').get() or deal.css('.date::text').get() or ''
+            item['popularity'] = deal.css('.popularity::text').get() or deal.css('.rating::text').get() or ''
+            item['staffpick'] = deal.css('.staff-pick::text').get() or deal.css('.featured::text').get() or ''
+            item['detail'] = deal.css('.deal-detail::text').get() or deal.css('.details::text').get() or ''
+            item['raw_html'] = deal.get()
+            
+            return item
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting deal item: {e}")
+            return None
+
+    def extract_category_from_url(self, url):
+        """Extract category from URL"""
+        if not url:
+            return ''
+        
+        # Extract category from URL patterns
+        if '/cat/' in url:
+            parts = url.split('/cat/')
+            if len(parts) > 1:
+                category_part = parts[1].split('/')[0]
+                return category_part.replace('-', ' ').title()
+        elif '/c' in url:
+            # Extract from /c123/Category/ pattern
+            parts = url.split('/c')
+            if len(parts) > 1:
+                category_part = parts[1].split('/')[1] if len(parts[1].split('/')) > 1 else ''
+                return category_part.replace('-', ' ').title()
+        
+        return ''
     
-    def closed(self, reason):
-        """Called when spider is closed"""
-        elapsed = time.time() - self.start_time
-        self.logger.info(f"Spider closed. Reason: {reason}")
-        self.logger.info(f"Final stats: {self.deals_extracted} deals extracted in {elapsed:.1f} seconds")
-        self.logger.info(f"Average rate: {self.deals_extracted/elapsed:.1f} deals per second")
+    def extract_collection_from_url(self, url):
+        """Extract collection from URL"""
+        if not url:
+            return None
+        
+        # Extract collection from URL patterns
+        if '/s' in url:
+            # Extract from /s123/Collection-Name/ pattern
+            parts = url.split('/s')
+            if len(parts) > 1:
+                collection_part = parts[1].split('/')[1] if len(parts[1].split('/')) > 1 else ''
+                return collection_part.replace('-', ' ').title()
+        
+        return None
+
+    def extract_deal_images(self, deal, item):
+        """Extract deal images"""
+        images = deal.css('img::attr(src)').getall()
+        for img_url in images:
+            if img_url:
+                image_item = DealImageItem()
+                image_item['dealid'] = item['dealid']
+                image_item['image_url'] = img_url
+                image_item['alt_text'] = deal.css('img::attr(alt)').get() or ''
+                yield image_item
+
+    def extract_deal_categories(self, deal, item):
+        """Extract deal categories"""
+        categories = deal.css('.category, .tag, .label, .breadcrumb').getall()
+        for category in categories:
+            if category.strip():
+                category_item = DealCategoryItem()
+                category_item['dealid'] = item['dealid']
+                category_item['category'] = category.strip()
+                yield category_item
+
+    def extract_related_deals(self, deal, item):
+        """Extract related deals"""
+        related_links = deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall()
+        for link in related_links:
+            if link:
+                related_item = RelatedDealItem()
+                related_item['dealid'] = item['dealid']
+                related_item['related_url'] = link
+                yield related_item
 
     def handle_pagination(self, response):
         """Handle pagination and infinite scroll for DealNews"""
         self.logger.info(f"Handling pagination for: {response.url}")
         
         # Look for DealNews-specific pagination patterns
-        # DealNews often uses AJAX pagination with specific patterns
         ajax_pagination_patterns = [
             'a[href*="page="]',
             'a[href*="p="]', 
@@ -275,49 +517,37 @@ class DealnewsSpider(scrapy.Spider):
         
         # Look for "Load More" or "Show More" buttons
         load_more_selectors = [
-            'button[class*="load"]',
-            'button[class*="more"]',
-            'a[class*="load"]',
-            'a[class*="more"]',
+            'button[data-url]',
             '.load-more',
             '.show-more',
-            '.pagination .next',
-            '.pager .next'
+            '.pagination-load-more',
+            'a[href*="load"]',
+            'a[href*="more"]'
         ]
         
         load_more_found = 0
         for selector in load_more_selectors:
-            load_more_btn = response.css(selector)
-            if load_more_btn:
-                # Try to find the URL for loading more content
-                href = load_more_btn.css('::attr(href)').get()
-                if href:
-                    self.logger.info(f"Found load more link: {href}")
-                    yield response.follow(href, self.parse)
-                    load_more_found += 1
-                    break
-                
-                # If it's a button, try to find data attributes
-                data_url = load_more_btn.css('::attr(data-url)').get()
+            load_more_buttons = response.css(selector)
+            for button in load_more_buttons[:5]:  # Limit to first 5 load more buttons
+                data_url = button.css('::attr(data-url)').get()
                 if data_url:
-                    self.logger.info(f"Found load more data URL: {data_url}")
-                    yield response.follow(data_url, self.parse)
+                    self.logger.info(f"Found load more button: {data_url}")
+                    yield response.follow(data_url, self.parse, errback=self.errback_http)
                     load_more_found += 1
-                    break
         
-        # Also look for traditional pagination links - extract ALL pages for maximum data
+        # Also look for traditional pagination links
         pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
         valid_pagination_links = 0
-        for link in pagination_links[:100]:  # More reasonable limit to avoid overwhelming the site
+        for link in pagination_links[:100]:  # More reasonable limit
             if link and ('page=' in link or 'p=' in link) and self.is_valid_dealnews_url(link):
                 self.logger.info(f"Found pagination link: {link}")
                 yield response.follow(link, self.parse, errback=self.errback_http)
                 valid_pagination_links += 1
         
-        # Look for "Load More" or infinite scroll endpoints - extract ALL for maximum data
+        # Look for "Load More" or infinite scroll endpoints
         load_more_data = response.css('button[data-url]::attr(data-url)').getall()
         valid_load_more_data = 0
-        for data_url in load_more_data[:50]:  # More reasonable limit to avoid overwhelming the site
+        for data_url in load_more_data[:50]:  # More reasonable limit
             if data_url:
                 self.logger.info(f"Found load more data: {data_url}")
                 yield response.follow(data_url, self.parse, errback=self.errback_http)
@@ -325,725 +555,45 @@ class DealnewsSpider(scrapy.Spider):
         
         self.logger.info(f"Pagination summary - AJAX pagination: {pagination_found}, Load more buttons: {load_more_found}, Pagination links: {valid_pagination_links}, Load more data: {valid_load_more_data}")
 
-    def extract_deals(self, response):
-        deals = []
-        
-        # Use multiple selectors to catch all possible deal elements
-        deal_selectors = [
-            '.content-card',
-            '.deal-card', 
-            '.offer-card',
-            '.product-card',
-            '.deal-item',
-            '.offer-item',
-            '.product-item',
-            '[data-content-id]',  # Any element with content ID
-            '.card',  # Generic card selector
-            '.item'   # Generic item selector
-        ]
-        
-        all_elements = []
-        for selector in deal_selectors:
-            elements = response.css(selector)
-            if elements:
-                self.logger.info(f"Found {len(elements)} elements with selector: {selector}")
-                all_elements.extend(elements)
-        
-        # Remove duplicates while preserving order
-        seen_elements = set()
-        unique_elements = []
-        for element in all_elements:
-            element_id = element.css('::attr(data-content-id)').get() or element.css('::attr(id)').get() or str(element)
-            if element_id not in seen_elements:
-                seen_elements.add(element_id)
-                unique_elements.append(element)
-        
-        self.logger.info(f"Found {len(unique_elements)} unique deal elements")
-        
-        # Process each element
-        valid_deals = 0
-        invalid_deals = 0
-        for element in unique_elements:
-            deal = self.extract_deal_from_element(element, response)
-            if deal and self.is_valid_deal(deal):
-                deals.append(deal)
-                valid_deals += 1
-            else:
-                invalid_deals += 1
-        
-        self.logger.info(f"Deal extraction summary - Valid: {valid_deals}, Invalid: {invalid_deals}, Total: {len(deals)}")
-        return deals
-
-    def is_valid_deal(self, deal):
-        """Validate if a deal has minimum required information"""
-        return (
-            deal.get('title') and len(deal['title'].strip()) > 5 and
-            (deal.get('url') or deal.get('deallink')) and
-            (deal.get('price') or deal.get('deal') or deal.get('store'))
-        )
-    
     def is_valid_dealnews_url(self, url):
-        """Validate if URL is a valid DealNews URL to avoid 404 errors"""
+        """Check if URL is a valid DealNews URL"""
         if not url:
             return False
         
-        # Check for problematic URL patterns that cause 404s
-        invalid_patterns = [
+        # Convert relative URLs to absolute
+        if url.startswith('/'):
+            url = f"https://www.dealnews.com{url}"
+        
+        # Check if it's a DealNews URL
+        if 'dealnews.com' not in url:
+            return False
+        
+        # Skip certain patterns
+        skip_patterns = [
             'javascript:',
             'mailto:',
-            'data:',
-            'about:',
-            'chrome-extension:',
-            'moz-extension:',
-            'edge-extension:',
-            'opera-extension:',
-            'safari-extension:',
-            'chrome:',
-            'about:blank',
-            'about:config',
-            'about:addons',
-            'about:preferences',
-            'about:settings',
-            'about:newtab',
-            'about:home',
-            'about:reader',
-            'about:cache',
-            'about:memory',
-            'about:performance',
-            'about:networking',
-            'about:debugging',
-            'about:profiling',
-            'about:logging',
-            'about:telemetry',
-            'about:studies',
+            '#',
+            'tel:',
+            'ftp:',
+            '.pdf',
+            '.jpg',
+            '.png',
+            '.gif',
+            '.css',
+            '.js'
         ]
         
-        for pattern in invalid_patterns:
+        for pattern in skip_patterns:
             if pattern in url.lower():
                 return False
         
-        # Only allow dealnews.com URLs
-        if 'dealnews.com' not in url:
-            return False
-            
-        # Allow all dealnews.com URLs (less restrictive)
         return True
 
-    def extract_deal_from_element(self, element, response):
-        deal = {}
+    def closed(self, reason):
+        """Called when spider closes"""
+        elapsed_time = time.time() - self.start_time
+        rate = self.deals_extracted / elapsed_time if elapsed_time > 0 else 0
         
-        # Extract deal ID from data attributes (based on HTML analysis)
-        deal['dealid'] = element.css('::attr(data-content-id)').get() or ''
-        
-        # Extract URL from data attributes or links
-        url = element.css('::attr(data-offer-url)').get()
-        if not url:
-            # Fallback to link href - look for the main deal link
-            url = element.css('a[href*="dealnews.com"]::attr(href)').get()
-            if not url:
-                url = element.css('a::attr(href)').get()
-        
-        if url and not url.startswith('#') and len(url) > 10:
-            deal['url'] = urljoin(response.url, url)
-            # Extract recid from URL parameters if present
-            parsed_url = urlparse(deal['url'])
-            query_params = parse_qs(parsed_url.query)
-            deal['recid'] = query_params.get('recid', [''])[0]
-        else:
-            deal['url'] = ''
-            deal['recid'] = ''
-        
-        # Extract title using multiple DealNews selectors
-        title_selectors = [
-            '.title::text',
-            '.deal-title::text', 
-            '.offer-title::text',
-            'h3::text',
-            'h4::text',
-            '.card-title::text',
-            '[data-testid="deal-title"]::text'
-        ]
-        
-        title = ''
-        for selector in title_selectors:
-            title = element.css(selector).get()
-            if title and len(title.strip()) > 5:
-                break
-        
-        if not title:
-            # Fallback to title attribute
-            title = element.css('.title::attr(title)').get()
-            if title and len(title.strip()) > 5:
-                title = title.strip()
-            else:
-                title = ''
-        
-        deal['title'] = title.strip() if title else ''
-        
-        # Extract price using multiple selectors
-        price_selectors = [
-            '.price::text',
-            '.deal-price::text',
-            '.offer-price::text',
-            '.current-price::text',
-            '.sale-price::text',
-            '[data-testid="price"]::text'
-        ]
-        
-        price = ''
-        for selector in price_selectors:
-            price = element.css(selector).get()
-            if price and '$' in price and any(char.isdigit() for char in price):
-                break
-        
-        if not price:
-            # Fallback: look for $ signs in text content
-            all_text = element.css('::text').getall()
-            for text in all_text:
-                text = text.strip()
-                if '$' in text and any(char.isdigit() for char in text) and len(text) < 20:
-                    price = text
-                    break
-        
-        deal['price'] = price.strip() if price else ''
-        
-        # Extract promo/coupon code - look for percentage or discount text
-        all_text = element.css('::text').getall()
-        for text in all_text:
-            text = text.strip()
-            if ('%' in text or 'off' in text.lower() or 'save' in text.lower()) and len(text) < 50:
-                deal['promo'] = text
-                break
-        else:
-            deal['promo'] = ''
-        
-        # Extract store using multiple selectors
-        store_selectors = [
-            '.store::text',
-            '.merchant::text',
-            '.retailer::text',
-            '.brand::text',
-            '[data-testid="store"]::text'
-        ]
-        
-        store = ''
-        for selector in store_selectors:
-            store = element.css(selector).get()
-            if store and len(store.strip()) > 1:
-                break
-        
-        if not store:
-            # Fallback: Extract store from published date text (e.g., "Amazon · 16 hrs ago")
-            all_text = element.css('::text').getall()
-            for text in all_text:
-                text = text.strip()
-                if '·' in text and ('hrs ago' in text or 'days ago' in text or 'mins ago' in text):
-                    # Extract store name before the "·" symbol
-                    store = text.split('·')[0].strip()
-                    break
-        
-        # Fallback to data-store attribute if no store found in text
-        if not store:
-            store_id = element.css('::attr(data-store)').get()
-            if store_id:
-                # Map store ID to store name
-                store_mapping = {
-                    '313': 'Amazon',
-                    '1': 'Walmart', 
-                    '2': 'Target',
-                    '3': 'Best Buy',
-                    '4': 'eBay',
-                    '5': 'Home Depot',
-                    '6': 'Macy\'s',
-                    '7': 'Nike',
-                    '8': 'adidas',
-                    '9': 'REI',
-                    '10': 'Dick\'s Sporting Goods'
-                }
-                store = store_mapping.get(store_id, f'Store_{store_id}')
-        
-        deal['store'] = store.strip() if store else ''
-        
-        # Extract deal description from snippet or use title as fallback
-        deal_text = element.css('.snippet::text').get()
-        if deal_text and len(deal_text.strip()) > 10:
-            deal['deal'] = deal_text.strip()
-        else:
-            # Fallback to title if no snippet available
-            deal['deal'] = deal.get('title', '')
-        
-        # Extract deal plus (additional info) - use callout text
-        dealplus = element.css('.callout::text').get()
-        deal['dealplus'] = dealplus.strip() if dealplus else ''
-        
-        # Extract additional filter variables from the image requirements
-        
-        # Staff Pick filter
-        staff_pick = element.css('[data-staff-pick="true"]').get()
-        if not staff_pick:
-            staff_pick = element.css('.staff-pick').get()
-        if not staff_pick:
-            # Check text content for staff pick indicators
-            all_text = element.css('::text').getall()
-            for text in all_text:
-                if 'staff pick' in text.lower() or 'editor' in text.lower():
-                    staff_pick = 'Yes'
-                    break
-        deal['staffpick'] = 'Yes' if staff_pick else 'No'
-        
-        # Offer Type filter
-        offer_type = element.css('[data-offer-type]::attr(data-offer-type)').get()
-        if not offer_type:
-            # Look for offer type in text content only (not scripts)
-            all_text = element.css('::text').getall()
-            for text in all_text:
-                text_lower = text.lower().strip()
-                # Skip JavaScript and HTML content
-                if 'function(' in text or '<' in text or 'javascript' in text_lower:
-                    continue
-                if any(keyword in text_lower for keyword in ['free shipping', 'coupon', 'rebate', 'clearance', 'sale', 'deal']):
-                    offer_type = text.strip()
-                    break
-        deal['offer_type'] = offer_type or ''
-        
-        # Popularity Rank filter (already extracted as popularity)
-        # This is already captured in the popularity field
-        
-        # Collection filter
-        collection = element.css('[data-collection]::attr(data-collection)').get()
-        if not collection:
-            # Look for collection indicators in categories
-            if deal.get('categories'):
-                for cat in deal['categories']:
-                    if 'collection' in cat.get('name', '').lower():
-                        collection = cat.get('name', '')
-                        break
-        deal['collection'] = collection or ''
-        
-        # Condition filter
-        condition = element.css('[data-condition]::attr(data-condition)').get()
-        if not condition:
-            # Look for condition in text content only (not scripts)
-            all_text = element.css('::text').getall()
-            for text in all_text:
-                text_lower = text.lower().strip()
-                # Skip JavaScript and HTML content
-                if 'function(' in text or '<' in text or 'javascript' in text_lower:
-                    continue
-                if any(keyword in text_lower for keyword in ['new', 'used', 'refurbished', 'open box', 'like new']):
-                    condition = text.strip()
-                    break
-        deal['condition'] = condition or 'New'
-        
-        # Events filter
-        events = element.css('[data-events]::attr(data-events)').get()
-        if not events:
-            # Look for event indicators
-            all_text = element.css('::text').getall()
-            for text in all_text:
-                text_lower = text.lower().strip()
-                if any(keyword in text_lower for keyword in ['black friday', 'cyber monday', 'prime day', 'flash sale', 'limited time']):
-                    events = text.strip()
-                    break
-        deal['events'] = events or ''
-        
-        # Offer Status filter
-        offer_status = element.css('[data-offer-status]::attr(data-offer-status)').get()
-        if not offer_status:
-            # Determine status based on availability
-            all_text = element.css('::text').getall()
-            text_content = ' '.join(all_text).lower()
-            if 'expired' in text_content or 'ended' in text_content:
-                offer_status = 'Expired'
-            elif 'limited' in text_content or 'while supplies last' in text_content:
-                offer_status = 'Limited'
-            else:
-                offer_status = 'Active'
-        deal['offer_status'] = offer_status or 'Active'
-        
-        # Include Expired filter (boolean)
-        deal['include_expired'] = 'Yes' if deal.get('offer_status') == 'Expired' else 'No'
-        
-        # Brand filter (extract from title or category)
-        brand = element.css('[data-brand]::attr(data-brand)').get()
-        if not brand:
-            # Try to extract brand from title
-            title = deal.get('title', '')
-            if title:
-                # Common brand patterns
-                brand_patterns = [
-                    'Apple', 'Samsung', 'Nike', 'Adidas', 'Sony', 'Microsoft', 'Google', 
-                    'Amazon', 'Walmart', 'Target', 'Best Buy', 'HP', 'Dell', 'Lenovo',
-                    'Canon', 'Nikon', 'Bose', 'JBL', 'LG', 'Panasonic', 'Philips'
-                ]
-                for pattern in brand_patterns:
-                    if pattern.lower() in title.lower():
-                        brand = pattern
-                        break
-        deal['brand'] = brand or ''
-        
-        # Start Date filter (extract from published date)
-        start_date = deal.get('published', '')
-        if start_date:
-            # Try to parse date
-            try:
-                from datetime import datetime
-                # Common date formats
-                date_formats = ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%B %d, %Y']
-                for fmt in date_formats:
-                    try:
-                        parsed_date = datetime.strptime(start_date, fmt)
-                        deal['start_date'] = parsed_date.strftime('%Y-%m-%d')
-                        break
-                    except:
-                        continue
-            except:
-                pass
-        
-        # Max Price filter (extract from price)
-        price_text = deal.get('price', '')
-        if price_text:
-            import re
-            # Extract numeric price
-            price_match = re.search(r'[\$]?(\d+(?:\.\d{2})?)', price_text)
-            if price_match:
-                try:
-                    max_price = float(price_match.group(1))
-                    deal['max_price'] = max_price
-                except:
-                    pass
-        
-        # Extract deal link - use the main link
-        deallink = element.css('a::attr(href)').get()
-        if deallink and not deallink.startswith('#') and len(deallink) > 10:
-            deal['deallink'] = urljoin(response.url, deallink)
-        else:
-            deal['deallink'] = deal.get('url', '')
-        
-        # Extract deal text (button text) - use CTA button text
-        dealtext = element.css('.btn-cta::text').get()
-        deal['dealtext'] = dealtext.strip() if dealtext else ''
-        
-        # Extract deal hover text - use aria-label
-        dealhover = element.css('a::attr(aria-label)').get()
-        deal['dealhover'] = dealhover.strip() if dealhover else ''
-        
-        # Extract published date - look for time patterns in text
-        all_text = element.css('::text').getall()
-        for text in all_text:
-            text = text.strip()
-            if 'hrs ago' in text or 'days ago' in text or 'mins ago' in text:
-                deal['published'] = text
-                break
-        else:
-            deal['published'] = ''
-        
-        # Extract popularity - look for "Popularity: X/5" pattern
-        for text in all_text:
-            text = text.strip()
-            if 'Popularity:' in text:
-                deal['popularity'] = text
-                break
-        else:
-            deal['popularity'] = ''
-        
-        # Extract staff pick flag - check for staff pick badge
-        staffpick = element.css('.badges .icon[href="#ic-staff-pick"]').get()
-        deal['staffpick'] = 'Yes' if staffpick else 'No'
-        
-        # Extract detail/description - use snippet as detail
-        detail = element.css('.snippet::text').get()
-        deal['detail'] = detail.strip() if detail else ''
-        
-        # Extract images
-        img_url = element.css('img::attr(src)').get()
-        if img_url and not img_url.startswith('data:') and len(img_url) > 10:
-            deal['images'] = [urljoin(response.url, img_url)]
-        else:
-            deal['images'] = []
-        
-        # Extract categories from chips
-        categories = []
-        chip_links = element.css('.chip::attr(href)').getall()
-        chip_titles = element.css('.chip::attr(title)').getall()
-        for i, link in enumerate(chip_links):
-            if link and i < len(chip_titles):
-                categories.append({
-                    'name': chip_titles[i].strip() if i < len(chip_titles) else '',
-                    'url': urljoin(response.url, link),
-                    'title': chip_titles[i].strip() if i < len(chip_titles) else ''
-                })
-        deal['categories'] = categories
-        
-        # Extract related deals from multiple sources to ensure 3+ per deal
-        related_deals = []
-        
-        # Strategy 1: Look for explicit related deals sections
-        related_selectors = [
-            '.related-deals a::attr(href)',
-            '.similar-deals a::attr(href)', 
-            '.you-might-like a::attr(href)',
-            '.recommended a::attr(href)',
-            '.more-deals a::attr(href)',
-            '.deal-suggestions a::attr(href)',
-            '.also-like a::attr(href)',
-            '.similar-items a::attr(href)',
-            '.related-items a::attr(href)'
-        ]
-        
-        for selector in related_selectors:
-            related_links = element.css(selector).getall()
-            for link in related_links:
-                if link and not link.startswith('#') and len(link) > 10:
-                    full_url = urljoin(response.url, link)
-                    if (full_url not in related_deals and full_url != deal.get('url', '') and 
-                        self.is_valid_dealnews_url(full_url)):
-                        related_deals.append(full_url)
-        
-        # Strategy 2: If we don't have enough related deals, find similar deals from same category
-        if len(related_deals) < 3:
-            # Look for other deals in the same category or similar price range
-            category_links = element.css('.chip a::attr(href)').getall()
-            for link in category_links[:50]:  # Get up to 50 category links for much more data
-                if link and not link.startswith('#') and len(link) > 10:
-                    full_url = urljoin(response.url, link)
-                    if (full_url not in related_deals and full_url != deal.get('url', '') and 
-                        self.is_valid_dealnews_url(full_url)):
-                        related_deals.append(full_url)
-        
-        # Strategy 3: If still not enough, find deals from same store
-        if len(related_deals) < 3:
-            # Look for other deals from the same store
-            store_links = element.css('a[href*="store"]::attr(href)').getall()
-            for link in store_links[:50]:  # Increased for much more data coverage
-                if link and not link.startswith('#') and len(link) > 10:
-                    full_url = urljoin(response.url, link)
-                    if full_url not in related_deals and full_url != deal.get('url', ''):
-                        related_deals.append(full_url)
-        
-        # Strategy 4: Fallback - find any other deals on the page
-        if len(related_deals) < 3:
-            all_deal_links = element.css('a::attr(href)').getall()
-            for link in all_deal_links:
-                if (link and not link.startswith('#') and len(link) > 10 and 
-                    'deal' in link.lower()):
-                    full_url = urljoin(response.url, link)
-                    if full_url not in related_deals and full_url != deal.get('url', ''):
-                        related_deals.append(full_url)
-                        if len(related_deals) >= 3:
-                            break
-        
-        # Ensure we have at least 3 related deals (pad with similar URLs if needed)
-        while len(related_deals) < 3:
-            # Generate a similar URL pattern for the same domain
-            base_url = deal.get('url', '')
-            if base_url:
-                # Create variations of the URL to simulate related deals
-                url_parts = base_url.split('/')
-                if len(url_parts) > 3:
-                    # Modify the URL to create related deal URLs
-                    variation_url = '/'.join(url_parts[:-1]) + f'/related-{len(related_deals) + 1}'
-                    if variation_url not in related_deals:
-                        related_deals.append(variation_url)
-                else:
-                    break
-            else:
-                break
-        
-        # Ensure we have at least 3 related deals
-        if len(related_deals) < 3:
-            # Strategy 4: If still not enough, find any deal links on the page
-            all_links = element.css('a::attr(href)').getall()
-            for link in all_links:
-                if link and not link.startswith('#') and len(link) > 10:
-                    full_url = urljoin(response.url, link)
-                    if (full_url not in related_deals and 
-                        full_url != deal.get('url', '') and
-                        'dealnews.com' in full_url):
-                        related_deals.append(full_url)
-                        if len(related_deals) >= 3:
-                            break
-        
-        deal['related_deals'] = related_deals[:25]  # Keep up to 25 related deals for maximum coverage
-        
-        # Set defaults for missing fields
-        deal.setdefault('dealid', '')
-        deal.setdefault('recid', '')
-        deal.setdefault('url', '')
-        deal.setdefault('title', '')
-        deal.setdefault('price', '')
-        deal.setdefault('promo', '')
-        # Extract category from breadcrumb - get the last breadcrumb item (actual category)
-        breadcrumb_links = element.css('.breadcrumb a::text').getall()
-        category = ''
-        if breadcrumb_links:
-            # Get the last breadcrumb item which is usually the category
-            category = breadcrumb_links[-1].strip()
-        
-        # Fallback to data-category attribute if no category found in breadcrumb
-        if not category:
-            category_id = element.css('::attr(data-category)').get()
-            if category_id:
-                # Map category ID to category name
-                category_mapping = {
-                    '196': 'Home & Garden',
-                    '280': 'Clothing & Accessories',
-                    '202': 'Clothing & Accessories', 
-                    '1': 'Electronics',
-                    '2': 'Clothing',
-                    '3': 'Computers',
-                    '4': 'Health & Beauty',
-                    '5': 'Sports & Outdoors'
-                }
-                category = category_mapping.get(category_id, f'Category_{category_id}')
-        
-        deal.setdefault('category', category.strip() if category else 'general')
-        deal.setdefault('store', '')
-        deal.setdefault('deal', '')
-        deal.setdefault('dealplus', '')
-        deal.setdefault('deallink', '')
-        deal.setdefault('dealtext', '')
-        deal.setdefault('dealhover', '')
-        deal.setdefault('published', '')
-        deal.setdefault('popularity', '')
-        deal.setdefault('staffpick', '')
-        deal.setdefault('detail', '')
-        
-        return deal
-
-    def extract_category_from_url(self, url):
-        """Extract category from URL - updated for current DealNews structure"""
-        if '/online-stores/' in url:
-            return 'stores'
-        elif '/c142/Electronics/' in url or '/electronics/' in url:
-            return 'electronics'
-        elif '/c142/Clothing/' in url or '/clothing/' in url or '/fashion/' in url:
-            return 'clothing'
-        elif '/c142/Home-Garden/' in url or '/home/' in url or '/garden/' in url:
-            return 'home'
-        elif '/c142/Electronics/Computers/' in url or '/computers/' in url or '/tech/' in url:
-            return 'computers'
-        elif '/c142/Health-Beauty/' in url or '/health/' in url or '/beauty/' in url:
-            return 'health'
-        elif '/c142/Sports-Outdoors/' in url or '/sports/' in url or '/outdoors/' in url:
-            return 'sports'
-        elif '/c142/Automotive/' in url or '/auto/' in url or '/car/' in url:
-            return 'automotive'
-        elif '/c142/Books-Movies-Music/' in url or '/books/' in url or '/movies/' in url:
-            return 'entertainment'
-        elif '/c142/' in url:
-            return 'categories'
-        else:
-            return 'general'
-
-    def create_item(self, deal, raw_html):
-        """Create a DealnewsItem from extracted deal data"""
-        item = DealnewsItem()
-        
-        # Map all fields from deal to item
-        item['dealid'] = deal.get('dealid', '')
-        item['recid'] = deal.get('recid', '')
-        item['url'] = deal.get('url', '')
-        item['title'] = deal.get('title', '')
-        item['price'] = deal.get('price', '')
-        item['promo'] = deal.get('promo', '')
-        item['category'] = deal.get('category', 'general')
-        item['store'] = deal.get('store', '')
-        item['deal'] = deal.get('deal', '')
-        item['dealplus'] = deal.get('dealplus', '')
-        item['deallink'] = deal.get('deallink', '')
-        item['dealtext'] = deal.get('dealtext', '')
-        item['dealhover'] = deal.get('dealhover', '')
-        item['published'] = deal.get('published', '')
-        item['popularity'] = deal.get('popularity', '')
-        item['staffpick'] = deal.get('staffpick', '')
-        item['detail'] = deal.get('detail', '')
-        item['raw_html'] = raw_html[:10000] if raw_html else ''  # Limit HTML size
-        
-        return item
-
-    def parse_related_deal(self, response):
-        """Parse individual related deal pages and extract full deal data"""
-        self.logger.info(f"Parsing related deal: {response.url}")
-        
-        # Extract deal data from the related deal page
-        deals = self.extract_deals(response)
-        
-        for deal in deals:
-            # Only process if this is a new deal (not already in database)
-            if self.is_new_deal(deal.get('url', '')):
-                self.logger.info(f"New related deal found: {deal.get('url', '')}")
-                
-                # Create main deal item
-                yield self.create_item(deal, response.text)
-                
-                # Create image items if images found
-                if deal.get('images'):
-                    for image_url in deal['images']:
-                        image_item = DealImageItem()
-                        image_item['dealid'] = deal.get('dealid', '')
-                        image_item['imageurl'] = image_url
-                        yield image_item
-                
-                # Create category items if categories found
-                if deal.get('categories'):
-                    for category in deal['categories']:
-                        category_item = DealCategoryItem()
-                        category_item['dealid'] = deal.get('dealid', '')
-                        category_item['category_name'] = category.get('name', '')
-                        category_item['category_url'] = category.get('url', '')
-                        category_item['category_title'] = category.get('title', '')
-                        yield category_item
-            else:
-                self.logger.info(f"Related deal already exists: {deal.get('url', '')}")
-
-    def is_new_deal(self, deal_url):
-        """Check if deal URL already exists in database"""
-        if not deal_url:
-            return False
-            
-        try:
-            import mysql.connector
-            import os
-            from dotenv import load_dotenv
-            
-            # Load environment variables
-            load_dotenv()
-            
-            # Database connection parameters
-            config = {
-                'host': os.getenv('MYSQL_HOST', 'localhost'),
-                'port': int(os.getenv('MYSQL_PORT', 3306)),
-                'user': os.getenv('MYSQL_USER', 'root'),
-                'password': os.getenv('MYSQL_PASSWORD', 'root'),
-                'database': os.getenv('MYSQL_DATABASE', 'dealnews'),
-                'autocommit': True
-            }
-            
-            # Connect to database
-            connection = mysql.connector.connect(**config)
-            cursor = connection.cursor()
-            
-            # Check if URL exists
-            cursor.execute("SELECT COUNT(*) FROM deals WHERE url = %s", (deal_url,))
-            count = cursor.fetchone()[0]
-            
-            cursor.close()
-            connection.close()
-            
-            # Return True if new (count == 0), False if exists (count > 0)
-            return count == 0
-            
-        except Exception as e:
-            self.logger.warning(f"Database check failed for {deal_url}: {e}")
-            # If database check fails, assume it's new to be safe
-            return True
-
-    def errback_http(self, failure):
-        """Handle HTTP errors and network failures"""
-        self.logger.error(f"Error processing request: {failure.request.url} - {failure.value}")
-        # Log the specific error type
-        if hasattr(failure.value, 'response'):
-            self.logger.error(f"Response status: {failure.value.response.status}")
-        else:
-            self.logger.error(f"Network error: {failure.value}")
+        self.logger.info(f"Spider closed. Reason: {reason}")
+        self.logger.info(f"Final stats: {self.deals_extracted} deals extracted in {elapsed_time:.1f} seconds")
+        self.logger.info(f"Average rate: {rate:.1f} deals per second")

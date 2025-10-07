@@ -82,6 +82,8 @@ class NormalizedMySQLPipeline:
                 title TEXT,
                 price VARCHAR(100),
                 promo TEXT,
+                category VARCHAR(100),
+                store VARCHAR(100),
                 deal TEXT,
                 dealplus TEXT,
                 deallink TEXT,
@@ -95,7 +97,9 @@ class NormalizedMySQLPipeline:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 INDEX idx_dealid (dealid),
-                INDEX idx_created_at (created_at)
+                INDEX idx_created_at (created_at),
+                INDEX idx_store (store),
+                INDEX idx_category (category)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """
             
@@ -297,10 +301,10 @@ class NormalizedMySQLPipeline:
                 
                 # 1. Save to main deals table
                 deal_sql = """
-                INSERT INTO deals (dealid, recid, url, title, price, promo, deal, dealplus, 
+                INSERT INTO deals (dealid, recid, url, title, price, promo, category, store, deal, dealplus, 
                                  deallink, dealtext, dealhover, published, popularity, staffpick, 
                                  detail, raw_html, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 """
                 
                 deal_values = (
@@ -310,6 +314,8 @@ class NormalizedMySQLPipeline:
                     item.get('title', ''),
                     item.get('price', ''),
                     item.get('promo', ''),
+                    item.get('category', ''),
+                    item.get('store', ''),
                     item.get('deal', ''),
                     item.get('dealplus', ''),
                     item.get('deallink', ''),
@@ -580,6 +586,9 @@ class NormalizedMySQLPipeline:
             stores_populated = 0
             brands_populated = 0
             categories_populated = 0
+            deal_categories_populated = 0
+            related_deals_populated = 0
+            collections_populated = 0
             
             for deal in deals:
                 dealid, title, url, store = deal
@@ -600,11 +609,30 @@ class NormalizedMySQLPipeline:
                 if category:
                     self.save_category(category, url, category)
                     categories_populated += 1
+                    
+                    # Link deal to category
+                    self.save_deal_category(dealid, category)
+                    deal_categories_populated += 1
+                
+                # Extract and populate collections
+                collection = self.extract_collection_from_url(url)
+                if collection:
+                    self.save_collection(collection, url)
+                    collections_populated += 1
+                
+                # Extract related deals from deal text
+                related_deals = self.extract_related_deals_from_text(title + " " + (store or ""))
+                for related_deal in related_deals:
+                    self.save_related_deal(dealid, related_deal)
+                    related_deals_populated += 1
             
             spider.logger.info(f"✅ Second pass completed:")
             spider.logger.info(f"   Stores populated: {stores_populated}")
             spider.logger.info(f"   Brands populated: {brands_populated}")
             spider.logger.info(f"   Categories populated: {categories_populated}")
+            spider.logger.info(f"   Deal-Category links: {deal_categories_populated}")
+            spider.logger.info(f"   Related deals: {related_deals_populated}")
+            spider.logger.info(f"   Collections: {collections_populated}")
             
         except Exception as e:
             spider.logger.error(f"❌ Error in second pass: {e}")
@@ -670,3 +698,73 @@ class NormalizedMySQLPipeline:
             
         except Exception as e:
             pass  # Ignore errors during clearing
+    
+    def save_deal_category(self, dealid, category):
+        """Save deal-category relationship"""
+        try:
+            self.cursor.execute(
+                "INSERT IGNORE INTO deal_categories (dealid, category) VALUES (%s, %s)",
+                (dealid, category)
+            )
+        except Exception as e:
+            pass  # Ignore duplicate errors
+    
+    def save_collection(self, collection_name, collection_url):
+        """Save collection to collections table"""
+        try:
+            self.cursor.execute(
+                "INSERT IGNORE INTO collections (collection_name, collection_url) VALUES (%s, %s)",
+                (collection_name, collection_url)
+            )
+        except Exception as e:
+            pass  # Ignore duplicate errors
+    
+    def save_related_deal(self, dealid, related_deal_text):
+        """Save related deal"""
+        try:
+            self.cursor.execute(
+                "INSERT IGNORE INTO related_deals (dealid, related_deal_text) VALUES (%s, %s)",
+                (dealid, related_deal_text)
+            )
+        except Exception as e:
+            pass  # Ignore duplicate errors
+    
+    def extract_collection_from_url(self, url):
+        """Extract collection from URL"""
+        if not url:
+            return None
+        
+        # Extract collection from URL patterns
+        if '/s' in url:
+            # Extract from /s123/Collection-Name/ pattern
+            parts = url.split('/s')
+            if len(parts) > 1:
+                collection_part = parts[1].split('/')[1] if len(parts[1].split('/')) > 1 else ''
+                return collection_part.replace('-', ' ').title()
+        
+        return None
+    
+    def extract_related_deals_from_text(self, text):
+        """Extract related deals from text"""
+        if not text:
+            return []
+        
+        # Simple keyword-based related deal extraction
+        related_keywords = [
+            'similar', 'related', 'also', 'compare', 'alternative', 'other',
+            'like this', 'see also', 'more deals', 'related deals'
+        ]
+        
+        related_deals = []
+        text_lower = text.lower()
+        
+        for keyword in related_keywords:
+            if keyword in text_lower:
+                # Extract surrounding text as related deal
+                start = text_lower.find(keyword)
+                if start != -1:
+                    related_text = text[max(0, start-50):start+100]
+                    if related_text.strip():
+                        related_deals.append(related_text.strip())
+        
+        return related_deals[:3]  # Limit to 3 related deals
