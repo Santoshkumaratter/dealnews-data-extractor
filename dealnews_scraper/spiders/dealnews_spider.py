@@ -267,8 +267,16 @@ class DealnewsSpider(scrapy.Spider):
         try:
             item = DealnewsItem()
             
-            # Basic deal information
-            item['dealid'] = deal.css('::attr(data-deal-id)').get() or deal.css('::attr(id)').get() or f"deal_{hash(deal.get())}"
+            # Basic deal information - improved dealid generation
+            dealid = deal.css('::attr(data-deal-id)').get()
+            if not dealid:
+                dealid = deal.css('::attr(id)').get()
+            if not dealid:
+                # Create a more stable dealid based on content + URL
+                deal_text = deal.css('::text').get() or ''
+                dealid = f"deal_{hash((response.url + deal_text)[:100])}"
+            
+            item['dealid'] = dealid
             item['recid'] = deal.css('::attr(data-rec-id)').get() or ''
             item['url'] = response.url
             
@@ -420,6 +428,9 @@ class DealnewsSpider(scrapy.Spider):
             item['detail'] = deal.css('.deal-detail::text').get() or deal.css('.details::text').get() or ''
             item['raw_html'] = deal.get()
             
+            # Extract filter variables from deal content
+            self.extract_filter_variables(item, deal, response)
+            
             # Populate images and related deals on main item for pipeline usage
             try:
                 item['images'] = [u for u in deal.css('img::attr(src)').getall() if u]
@@ -567,6 +578,72 @@ class DealnewsSpider(scrapy.Spider):
                 valid_load_more_data += 1
         
         self.logger.info(f"Pagination summary - AJAX pagination: {pagination_found}, Load more buttons: {load_more_found}, Pagination links: {valid_pagination_links}, Load more data: {valid_load_more_data}")
+
+    def extract_filter_variables(self, item, deal, response):
+        """Extract filter variables from deal content and URL"""
+        # Extract offer type from deal text
+        deal_text = (item.get('deal', '') + ' ' + item.get('dealplus', '') + ' ' + item.get('detail', '')).lower()
+        
+        # Offer type extraction
+        if any(word in deal_text for word in ['free shipping', 'free delivery']):
+            item['offer_type'] = 'Free Shipping'
+        elif any(word in deal_text for word in ['coupon', 'discount code', 'promo code']):
+            item['offer_type'] = 'Coupon'
+        elif any(word in deal_text for word in ['rebate', 'cashback', 'cash back']):
+            item['offer_type'] = 'Rebate'
+        elif any(word in deal_text for word in ['clearance', 'sale', 'off']):
+            item['offer_type'] = 'Sale'
+        else:
+            item['offer_type'] = ''
+        
+        # Condition extraction
+        if any(word in deal_text for word in ['new', 'brand new']):
+            item['condition'] = 'New'
+        elif any(word in deal_text for word in ['used', 'pre-owned', 'second hand']):
+            item['condition'] = 'Used'
+        elif any(word in deal_text for word in ['refurbished', 'refurb']):
+            item['condition'] = 'Refurbished'
+        else:
+            item['condition'] = 'New'  # Default to new
+        
+        # Events extraction
+        if any(word in deal_text for word in ['black friday', 'cyber monday', 'prime day']):
+            item['events'] = 'Black Friday'
+        elif any(word in deal_text for word in ['christmas', 'holiday', 'xmas']):
+            item['events'] = 'Holiday'
+        elif any(word in deal_text for word in ['back to school', 'school']):
+            item['events'] = 'Back to School'
+        else:
+            item['events'] = ''
+        
+        # Offer status extraction
+        if any(word in deal_text for word in ['limited time', 'expires', 'ending soon']):
+            item['offer_status'] = 'Limited'
+        elif any(word in deal_text for word in ['expired', 'ended', 'no longer available']):
+            item['offer_status'] = 'Expired'
+        else:
+            item['offer_status'] = 'Active'  # Default to active
+        
+        # Include expired (default to No)
+        item['include_expired'] = 'No'
+        
+        # Brand extraction from title
+        title = item.get('title', '').lower()
+        brands = ['apple', 'samsung', 'nike', 'adidas', 'sony', 'microsoft', 'google', 'amazon', 'walmart', 'target', 'best buy']
+        for brand in brands:
+            if brand in title:
+                item['brand'] = brand.title()
+                break
+        else:
+            item['brand'] = ''
+        
+        # Collection extraction from URL
+        item['collection'] = self.extract_collection_from_url(response.url)
+        
+        # Start date and max price (extract from URL params or set defaults)
+        item['start_date'] = ''
+        item['max_price'] = ''
+        item['popularity_rank'] = ''
 
     def is_valid_dealnews_url(self, url):
         """Check if URL is a valid DealNews URL"""

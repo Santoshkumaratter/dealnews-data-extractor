@@ -289,15 +289,21 @@ class NormalizedMySQLPipeline:
                 
                 # Check if deal already exists (unless force update is enabled)
                 force_update = os.getenv('FORCE_UPDATE', 'false').lower() in ('1', 'true', 'yes')
-                if not force_update:
+                clear_data = os.getenv('CLEAR_DATA', 'false').lower() in ('1', 'true', 'yes')
+                
+                if not force_update and not clear_data:
                     self.cursor.execute("SELECT id FROM deals WHERE dealid = %s", (dealid,))
                     if self.cursor.fetchone():
                         spider.logger.info(f"Deal {dealid} already exists, skipping (use FORCE_UPDATE=true to re-scrape)")
                         return item
                 else:
-                    # Force update mode - delete existing deal first
+                    # Force update mode or clear data mode - delete existing deal first
                     self.cursor.execute("DELETE FROM deals WHERE dealid = %s", (dealid,))
-                    spider.logger.info(f"Force update mode: Re-scraping deal {dealid}")
+                    self.cursor.execute("DELETE FROM deal_filters WHERE dealid = %s", (dealid,))
+                    self.cursor.execute("DELETE FROM related_deals WHERE dealid = %s", (dealid,))
+                    self.cursor.execute("DELETE FROM deal_images WHERE dealid = %s", (dealid,))
+                    self.cursor.execute("DELETE FROM deal_categories WHERE dealid = %s", (dealid,))
+                    spider.logger.info(f"Force update/clear mode: Re-scraping deal {dealid}")
                 
                 # 1. Save to main deals table
                 deal_sql = """
@@ -511,13 +517,17 @@ class NormalizedMySQLPipeline:
                          offer_type, condition_type, events, offer_status, include_expired):
         """Save filter variables to deal_filters table"""
         try:
+            # Convert boolean to int for MySQL
+            include_expired_int = 1 if include_expired else 0
+            
             self.cursor.execute("""
                 INSERT INTO deal_filters (dealid, store_id, brand_id, collection_id, 
                                         offer_type, condition_type, events, offer_status, include_expired)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (dealid, store_id, brand_id, collection_id, offer_type, 
-                  condition_type, events, offer_status, include_expired))
+                  condition_type, events, offer_status, include_expired_int))
         except Exception as e:
+            print(f"Error saving deal_filters: {e}")  # Debug output
             pass  # Ignore errors
 
     def save_related_deal(self, dealid, related_url):
