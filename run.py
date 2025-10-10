@@ -308,15 +308,23 @@ def main():
         os.environ['MYSQL_PASSWORD'] = mysql_password
         os.environ['MYSQL_DATABASE'] = mysql_database
     
-    # Set up JSON feed exporter (always export to JSON for debugging)
+    # Set up feed exporters (JSON always; CSV optional for client)
     os.makedirs('exports', exist_ok=True)
-    settings.set('FEEDS', {
+    feeds = {
         'exports/deals.json': {
             'format': 'json',
             'encoding': 'utf8',
             'indent': 2,
-        },
-    })
+        }
+    }
+    # Enable CSV if requested via env
+    enable_csv = os.getenv('ENABLE_CSV_EXPORT', 'true').lower() in ('1', 'true', 'yes')
+    if enable_csv:
+        feeds['exports/deals.csv'] = {
+            'format': 'csv',
+            'encoding': 'utf8',
+        }
+    settings.set('FEEDS', feeds)
     
     # Enable proper logging for progress tracking
     settings.set('LOG_LEVEL', 'INFO')

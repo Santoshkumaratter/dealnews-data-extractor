@@ -209,6 +209,7 @@ class NormalizedMySQLPipeline:
                 INDEX idx_offer_type (offer_type),
                 INDEX idx_condition_type (condition_type),
                 INDEX idx_offer_status (offer_status),
+                UNIQUE KEY unique_deal_filter (dealid),
                 FOREIGN KEY (dealid) REFERENCES deals(dealid) ON DELETE CASCADE,
                 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
                 FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL,
@@ -291,12 +292,7 @@ class NormalizedMySQLPipeline:
                 force_update = os.getenv('FORCE_UPDATE', 'false').lower() in ('1', 'true', 'yes')
                 clear_data = os.getenv('CLEAR_DATA', 'false').lower() in ('1', 'true', 'yes')
                 
-                if not force_update and not clear_data:
-                    self.cursor.execute("SELECT id FROM deals WHERE dealid = %s", (dealid,))
-                    if self.cursor.fetchone():
-                        spider.logger.info(f"Deal {dealid} already exists, skipping (use FORCE_UPDATE=true to re-scrape)")
-                        return item
-                else:
+                if force_update or clear_data:
                     # Force update mode or clear data mode - delete existing deal first
                     self.cursor.execute("DELETE FROM deals WHERE dealid = %s", (dealid,))
                     self.cursor.execute("DELETE FROM deal_filters WHERE dealid = %s", (dealid,))
@@ -304,6 +300,7 @@ class NormalizedMySQLPipeline:
                     self.cursor.execute("DELETE FROM deal_images WHERE dealid = %s", (dealid,))
                     self.cursor.execute("DELETE FROM deal_categories WHERE dealid = %s", (dealid,))
                     spider.logger.info(f"Force update/clear mode: Re-scraping deal {dealid}")
+                # else: no skip; proceed to upsert and process filters/relations
                 
                 # 1. Save to main deals table
                 deal_sql = """
@@ -311,6 +308,24 @@ class NormalizedMySQLPipeline:
                                  deallink, dealtext, dealhover, published, popularity, staffpick, 
                                  detail, raw_html, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ON DUPLICATE KEY UPDATE 
+                    recid = VALUES(recid),
+                    url = VALUES(url),
+                    title = VALUES(title),
+                    price = VALUES(price),
+                    promo = VALUES(promo),
+                    category = VALUES(category),
+                    store = VALUES(store),
+                    deal = VALUES(deal),
+                    dealplus = VALUES(dealplus),
+                    deallink = VALUES(deallink),
+                    dealtext = VALUES(dealtext),
+                    dealhover = VALUES(dealhover),
+                    published = VALUES(published),
+                    popularity = VALUES(popularity),
+                    staffpick = VALUES(staffpick),
+                    detail = VALUES(detail),
+                    raw_html = VALUES(raw_html)
                 """
                 
                 deal_values = (
@@ -390,13 +405,17 @@ class NormalizedMySQLPipeline:
                     condition_type=item.get('condition', ''),
                     events=item.get('events', ''),
                     offer_status=item.get('offer_status', ''),
-                    include_expired=item.get('include_expired', 'No') == 'Yes'
+                    include_expired=item.get('include_expired', 'No') == 'Yes',
+                    category_id=self.get_category_id(item.get('category', '')),
+                    start_date=item.get('start_date') or None,
+                    max_price=item.get('max_price') or None,
+                    popularity_rank=item.get('popularity_rank') or None
                 )
                 
                 # 7. Save related deals
                 related_deals = item.get('related_deals', [])
-                if related_deals and len(related_deals) >= 3:  # Ensure 3+ related deals
-                    for related_url in related_deals[:10]:  # Limit to 10 related deals
+                if related_deals:
+                    for related_url in related_deals[:25]:  # Save up to 25 related
                         self.save_related_deal(dealid, related_url)
                         self.related_deals_saved += 1
                 
@@ -514,18 +533,35 @@ class NormalizedMySQLPipeline:
             return None
 
     def save_deal_filters(self, dealid, store_id, brand_id, collection_id, 
-                         offer_type, condition_type, events, offer_status, include_expired):
+                         offer_type, condition_type, events, offer_status, include_expired,
+                         category_id=None, start_date=None, max_price=None, popularity_rank=None):
         """Save filter variables to deal_filters table"""
         try:
             # Convert boolean to int for MySQL
             include_expired_int = 1 if include_expired else 0
             
             self.cursor.execute("""
-                INSERT INTO deal_filters (dealid, store_id, brand_id, collection_id, 
-                                        offer_type, condition_type, events, offer_status, include_expired)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (dealid, store_id, brand_id, collection_id, offer_type, 
-                  condition_type, events, offer_status, include_expired_int))
+                INSERT INTO deal_filters (
+                    dealid, start_date, max_price, category_id, store_id, brand_id, collection_id,
+                    offer_type, popularity_rank, condition_type, events, offer_status, include_expired
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE 
+                    start_date = VALUES(start_date),
+                    max_price = VALUES(max_price),
+                    category_id = VALUES(category_id),
+                    store_id = VALUES(store_id),
+                    brand_id = VALUES(brand_id),
+                    collection_id = VALUES(collection_id),
+                    offer_type = VALUES(offer_type),
+                    popularity_rank = VALUES(popularity_rank),
+                    condition_type = VALUES(condition_type),
+                    events = VALUES(events),
+                    offer_status = VALUES(offer_status),
+                    include_expired = VALUES(include_expired)
+            """, (
+                dealid, start_date, max_price, category_id, store_id, brand_id, collection_id,
+                offer_type, popularity_rank, condition_type, events, offer_status, include_expired_int
+            ))
         except Exception as e:
             print(f"Error saving deal_filters: {e}")  # Debug output
             pass  # Ignore errors
@@ -620,9 +656,11 @@ class NormalizedMySQLPipeline:
                     self.save_category(category, url, category)
                     categories_populated += 1
                     
-                    # Link deal to category
-                    self.save_deal_category(dealid, category)
-                    deal_categories_populated += 1
+                    # Link deal to category by id
+                    category_id = self.get_category_id(category)
+                    if category_id:
+                        self.save_deal_category(dealid, category_id)
+                        deal_categories_populated += 1
                 
                 # Extract and populate collections
                 collection = self.extract_collection_from_url(url)
@@ -709,25 +747,33 @@ class NormalizedMySQLPipeline:
         except Exception as e:
             pass  # Ignore errors during clearing
     
-    def save_deal_category(self, dealid, category):
-        """Save deal-category relationship"""
+    def save_deal_category(self, dealid, category_id):
+        """Save deal-category relationship by category_id"""
         try:
             self.cursor.execute(
-                "INSERT IGNORE INTO deal_categories (dealid, category) VALUES (%s, %s)",
-                (dealid, category)
+                "INSERT IGNORE INTO deal_categories (dealid, category_id) VALUES (%s, %s)",
+                (dealid, category_id)
             )
         except Exception as e:
             pass  # Ignore duplicate errors
     
-    def save_collection(self, collection_name, collection_url):
+    def save_collection(self, collection_name, collection_url=None):
         """Save collection to collections table"""
         try:
+            # Base schema uses only collection_name
             self.cursor.execute(
-                "INSERT IGNORE INTO collections (collection_name, collection_url) VALUES (%s, %s)",
-                (collection_name, collection_url)
+                "INSERT IGNORE INTO collections (collection_name) VALUES (%s)",
+                (collection_name,)
             )
-        except Exception as e:
-            pass  # Ignore duplicate errors
+        except Exception:
+            # Extended schema fallback
+            try:
+                self.cursor.execute(
+                    "INSERT IGNORE INTO collections (collection_name, collection_url) VALUES (%s, %s)",
+                    (collection_name, collection_url or '')
+                )
+            except Exception:
+                pass
     
     def save_related_deal(self, dealid, related_deal_text):
         """Save related deal"""

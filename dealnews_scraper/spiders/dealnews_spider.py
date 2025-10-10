@@ -267,15 +267,24 @@ class DealnewsSpider(scrapy.Spider):
         try:
             item = DealnewsItem()
             
-            # Basic deal information - improved dealid generation
-            dealid = deal.css('::attr(data-deal-id)').get()
+            # Basic deal information - improved dealid generation (prefer absolute deal link)
+            dealid = deal.css('::attr(data-deal-id)').get() or deal.css('::attr(id)').get()
+            # We'll compute deallink first to derive a stable dealid if needed
+            link = deal.css('a::attr(href)').get()
+            if link:
+                try:
+                    # Make absolute
+                    link = response.urljoin(link)
+                except Exception:
+                    pass
+            # If no provided dealid, derive from absolute link; else fallback to content hash
             if not dealid:
-                dealid = deal.css('::attr(id)').get()
-            if not dealid:
-                # Create a more stable dealid based on content + URL
-                deal_text = deal.css('::text').get() or ''
-                dealid = f"deal_{hash((response.url + deal_text)[:100])}"
-            
+                if link:
+                    dealid = f"deal_{hash(link)}"
+                else:
+                    deal_text = deal.css('::text').get() or ''
+                    dealid = f"deal_{hash((response.url + deal_text)[:200])}"
+
             item['dealid'] = dealid
             item['recid'] = deal.css('::attr(data-rec-id)').get() or ''
             item['url'] = response.url
@@ -419,7 +428,8 @@ class DealnewsSpider(scrapy.Spider):
             item['deal'] = deal.css('.deal-text::text').get() or deal.css('.deal-description::text').get() or ''
             item['dealplus'] = deal.css('.deal-plus::text').get() or ''
             item['promo'] = deal.css('.promo::text').get() or deal.css('.promotion::text').get() or ''
-            item['deallink'] = deal.css('a::attr(href)').get() or ''
+            # Use the absolute deal link if available
+            item['deallink'] = link or ''
             item['dealtext'] = deal.css('.deal-description::text').get() or deal.css('.deal-summary::text').get() or ''
             item['dealhover'] = deal.css('::attr(title)').get() or ''
             item['published'] = deal.css('.published::text').get() or deal.css('.date::text').get() or ''
