@@ -326,9 +326,11 @@ def main():
         }
     settings.set('FEEDS', feeds)
     
-    # Enable proper logging for progress tracking
-    settings.set('LOG_LEVEL', 'INFO')
+    # Enable proper logging for progress tracking (configurable via env)
+    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    settings.set('LOG_LEVEL', log_level)
     settings.set('LOG_ENABLED', True)
+    logger.info(f"Log level set to: {log_level}")
     
     # Create and run crawler
     process = CrawlerProcess(settings)

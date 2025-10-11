@@ -291,8 +291,9 @@ class NormalizedMySQLPipeline:
                 # Check if deal already exists (unless force update is enabled)
                 force_update = os.getenv('FORCE_UPDATE', 'false').lower() in ('1', 'true', 'yes')
                 clear_data = os.getenv('CLEAR_DATA', 'false').lower() in ('1', 'true', 'yes')
+                capture_mode = os.getenv('CAPTURE_MODE', 'incremental').lower()  # 'full' | 'incremental'
                 
-                if force_update or clear_data:
+                if force_update or clear_data or capture_mode == 'full':
                     # Force update mode or clear data mode - delete existing deal first
                     self.cursor.execute("DELETE FROM deals WHERE dealid = %s", (dealid,))
                     self.cursor.execute("DELETE FROM deal_filters WHERE dealid = %s", (dealid,))
