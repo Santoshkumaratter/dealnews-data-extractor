@@ -96,12 +96,25 @@ class ProxyMiddleware:
             request.dont_filter = True
             return request
         elif response.status == 403:
-            spider.logger.warning(f"Received 403 for {request.url}. Rotating UA and headers.")
+            # Track retry count for exponential backoff
+            retry_count = request.meta.get('retry_403_count', 0)
+            if retry_count >= 3:
+                spider.logger.error(f"Received 403 for {request.url} after {retry_count} retries. Skipping.")
+                return response  # Stop retrying after 3 attempts
+            
+            # Exponential backoff delay
+            delay = (2 ** retry_count) * 5  # 5s, 10s, 20s
+            spider.logger.warning(f"Received 403 for {request.url}. Retry {retry_count + 1}/3 with {delay}s delay. Rotating UA and headers.")
+            
             # Rotate user agent
             request.headers['User-Agent'] = random.choice(self.user_agents)
             # Add additional headers that might help bypass blocks
-            request.headers.setdefault('Referer', 'https://www.google.com/')
-            request.headers.setdefault('X-Forwarded-For', f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}")
+            request.headers['Referer'] = 'https://www.google.com/'
+            request.headers['X-Forwarded-For'] = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
+            
+            # Set download delay for this request
+            request.meta['download_delay'] = delay
+            request.meta['retry_403_count'] = retry_count + 1
             request.dont_filter = True
             return request
         elif response.status == 404:
