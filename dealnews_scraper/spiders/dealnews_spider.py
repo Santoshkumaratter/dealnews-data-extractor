@@ -183,43 +183,24 @@ class DealnewsSpider(scrapy.Spider):
         # IMPROVED DEAL EXTRACTION - Multiple selectors for maximum coverage
         deals = []
         
-        # Try multiple deal selectors to find ALL deals on the page
+        # Try multiple deal selectors to find ONLY REAL DEALS (not navigation)
         deal_selectors = [
-            # DealNews specific selectors
+            # DealNews specific selectors - MOST SPECIFIC FIRST
+            '[data-deal-id]',  # Real deals have data-deal-id
+            '[data-rec-id]',   # Real deals have data-rec-id
             '.deal-item',
-            '.deal',
             '.deal-card', 
             '.deal-tile',
             '.deal-container',
             '.deal-wrapper',
-            '[data-deal-id]',
-            '[data-rec-id]',
             '.deal-box',
             '.deal-content',
-            '.deal-info',
             '.deal-listing',
             '.deal-post',
             '.deal-entry',
-            '.deal-row',
-            '.deal-block',
-            # Generic selectors
-            '.item',
-            '.product',
-            '.listing',
-            '.post',
-            '.entry',
-            '.row',
-            '.block',
-            # Link-based selectors
-            'a[href*="/deals/"]',
-            'a[href*="/deal/"]',
-            'a[href*="dealnews.com"]',
-            # Article-based selectors
-            'article',
-            '.article',
-            '.content-item',
-            '.feed-item',
-            '.stream-item'
+            # Only use these if above don't work
+            'article.deal',
+            '.content-item.deal'
         ]
         
         for selector in deal_selectors:
@@ -265,6 +246,21 @@ class DealnewsSpider(scrapy.Spider):
     def extract_deal_item(self, deal, response):
         """Extract main deal item with IMPROVED SELECTORS"""
         try:
+            # Skip navigation/menu items that are not real deals
+            deal_html = deal.get()
+            skip_patterns = [
+                'nav-menu-', 'menu-item', 'class="menu-item"',
+                'About Us', 'Contact', 'Sign In', 'Register',
+                'Back to Classic', 'Holiday Hours', 'Return Policy',
+                'Price Match', 'Student Discount', 'Free Trial',
+                'Promo Code', 'Coupon Code', 'Gift Card'
+            ]
+            
+            # Skip if this looks like a navigation item
+            for pattern in skip_patterns:
+                if pattern in deal_html and 'deal-item' not in deal_html and 'data-deal-id' not in deal_html:
+                    return None
+            
             item = DealnewsItem()
             
             # Basic deal information - improved dealid generation (prefer absolute deal link)
