@@ -81,9 +81,17 @@ class ProxyMiddleware:
         self._apply_proxy(request, spider)
 
     def process_exception(self, request, exception, spider):
-        # On network errors/timeouts: rotate UA and proxy, then retry
-        spider.logger.warning(f"Request exception: {type(exception).__name__} for {request.url}; rotating proxy/UA and retrying")
+        # On network errors/timeouts: rotate UA and proxy, then retry with delay
+        exception_name = type(exception).__name__
+        spider.logger.warning(f"Request exception: {exception_name} for {request.url}; rotating proxy/UA and retrying with delay")
+
+        # Rotate user agent
         request.headers['User-Agent'] = random.choice(self.user_agents)
+
+        # Add extra delay for connection issues
+        request.meta['download_delay'] = 10  # 10 second delay for retries
+
+        # Apply proxy rotation
         self._apply_proxy(request, spider, force_rotate=True)
         request.dont_filter = True
         return request

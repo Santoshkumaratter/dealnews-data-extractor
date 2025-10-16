@@ -16,22 +16,18 @@ class DealnewsSpider(scrapy.Spider):
         self.start_time = time.time()
         self.max_deals = 1000000  # Maximum limit - 1,000,000+ deals for complete data extraction
     
-    # ONLY WORKING URLs - NO 404 ERRORS
+    # CURRENT WORKING URLs - UPDATED 2025
     start_urls = [
         # Main pages - verified working
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
-        
-        # Electronics - verified working URLs
+
+        # Electronics - current working URLs
         "https://www.dealnews.com/c142/Electronics/",
-        "https://www.dealnews.com/c142/Electronics/b565/Garmin/",
         "https://www.dealnews.com/c147/Electronics/Audio-Components/Speakers/",
         "https://www.dealnews.com/c148/Electronics/Audio-Components/Home-Theater-Systems/",
         "https://www.dealnews.com/c155/Electronics/Audio-Components/Headphones/",
         "https://www.dealnews.com/c159/Electronics/TVs/",
-        "https://www.dealnews.com/c159/Electronics/TVs/?r=107%2C110%2C113",
-        "https://www.dealnews.com/c159/Electronics/TVs/?r=116",
-        "https://www.dealnews.com/c159/Electronics/TVs/?r=119%2C122",
         "https://www.dealnews.com/c159/Electronics/TVs/b1327/Vizio/",
         "https://www.dealnews.com/c159/Electronics/TVs/b30622/TCL/",
         "https://www.dealnews.com/c159/Electronics/TVs/f1409/4-K/",
@@ -47,9 +43,6 @@ class DealnewsSpider(scrapy.Spider):
         "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1918/Xbox-Series-S-X/",
         "https://www.dealnews.com/c299/Electronics/Camcorders/",
         "https://www.dealnews.com/c306/Electronics/Batteries/",
-        "https://www.dealnews.com/c306/Electronics/Batteries/f1164/AAA/",
-        "https://www.dealnews.com/c306/Electronics/Batteries/f1167/C/",
-        "https://www.dealnews.com/c306/Electronics/Batteries/f1170/D/",
         "https://www.dealnews.com/c452/Electronics/Streaming-Media-Players/",
         "https://www.dealnews.com/c491/Electronics/Phones-Cell-Phones/Apple-iPhones/",
         "https://www.dealnews.com/c671/Electronics/Phones-Cell-Phones/Apple-iPhones/iPhone-Accessories/iPhone-Cases/",
@@ -185,11 +178,11 @@ class DealnewsSpider(scrapy.Spider):
         
         # Try multiple deal selectors to find ONLY REAL DEALS (not navigation)
         deal_selectors = [
-            # DealNews specific selectors - MOST SPECIFIC FIRST
+            # DealNews specific selectors - UPDATED for current site
             '[data-deal-id]',  # Real deals have data-deal-id
             '[data-rec-id]',   # Real deals have data-rec-id
-            '.deal-item',
-            '.deal-card', 
+            '.deal-item',      # Main deal container
+            '.deal-card',
             '.deal-tile',
             '.deal-container',
             '.deal-wrapper',
@@ -198,9 +191,21 @@ class DealnewsSpider(scrapy.Spider):
             '.deal-listing',
             '.deal-post',
             '.deal-entry',
-            # Only use these if above don't work
-            'article.deal',
-            '.content-item.deal'
+            # More specific selectors for actual deals
+            '.deal-item-wrapper',
+            '.deal-item-container',
+            '.deal-block',
+            '.deal-grid-item',
+            '.deal-list-item',
+            # Look within main content areas (avoid navigation)
+            'main [data-deal-id]',
+            'main [data-rec-id]',
+            'main .deal-item',
+            '.main-content [data-deal-id]',
+            '.main-content .deal-item',
+            # Article-based selectors for deals
+            'article[class*="deal"]:not([class*="nav"]):not([class*="menu"])',
+            'div[class*="deal"]:not([class*="nav"]):not([class*="menu"])'
         ]
         
         for selector in deal_selectors:
@@ -285,17 +290,23 @@ class DealnewsSpider(scrapy.Spider):
             item['recid'] = deal.css('::attr(data-rec-id)').get() or ''
             item['url'] = response.url
             
-            # IMPROVED Title extraction with DealNews-specific selectors
+            # IMPROVED Title extraction with UPDATED DealNews selectors
             title_selectors = [
-                # DealNews specific
+                # DealNews specific (current site structure)
                 '.deal-title::text',
                 '.deal-name::text',
                 '.deal-headline::text',
                 '.deal-text::text',
                 '.deal-description::text',
                 '.deal-summary::text',
-                # Generic
-                '.title::text', 
+                # Current site selectors
+                '.deal-title-text::text',
+                '.deal-title-text::text',
+                '.deal-content h3::text',
+                '.deal-content h4::text',
+                '.deal-content .title::text',
+                # Generic fallbacks
+                '.title::text',
                 'h1::text',
                 'h2::text',
                 'h3::text',
@@ -307,9 +318,9 @@ class DealnewsSpider(scrapy.Spider):
                 '.listing-title::text',
                 '.post-title::text',
                 '.entry-title::text',
-                # Link text
-                'a::text',
-                '.link::text',
+                # Link text (more targeted)
+                'a[href*="/deals/"]::text',
+                'a[href*="/deal/"]::text',
                 # Other possibilities
                 '.name::text',
                 '.headline::text',
@@ -327,29 +338,41 @@ class DealnewsSpider(scrapy.Spider):
             else:
                 item['title'] = 'No title found'
             
-            # IMPROVED Price extraction
+            # IMPROVED Price extraction with UPDATED selectors
             price_selectors = [
-                # DealNews specific
+                # DealNews specific (current site)
                 '.deal-price::text',
                 '.price::text',
                 '.sale-price::text',
                 '.current-price::text',
                 '.deal-amount::text',
                 '.deal-cost::text',
-                # Generic
+                # Current site structure
                 '.price-amount::text',
                 '.price-value::text',
-                '.cost::text',
-                '.amount::text',
-                '.value::text',
-                # With spans
+                '.price-text::text',
+                '.price-current::text',
+                '.deal-price-value::text',
+                # With spans (current structure)
                 'span[class*="price"]::text',
                 'span[class*="cost"]::text',
                 'span[class*="amount"]::text',
-                # With divs
+                '.price span::text',
+                '.deal-price span::text',
+                # With divs (current structure)
                 'div[class*="price"]::text',
                 'div[class*="cost"]::text',
-                'div[class*="amount"]::text'
+                'div[class*="amount"]::text',
+                '.price div::text',
+                # Generic fallbacks
+                '.cost::text',
+                '.amount::text',
+                '.value::text',
+                # Look for price patterns
+                'span:contains("$")::text',
+                'div:contains("$")::text',
+                # Very generic
+                '*::text'  # Last resort - scan all text for price patterns
             ]
             
             for selector in price_selectors:
@@ -523,62 +546,63 @@ class DealnewsSpider(scrapy.Spider):
         """Handle pagination and infinite scroll for DealNews"""
         self.logger.info(f"Handling pagination for: {response.url}")
         
-        # Look for DealNews-specific pagination patterns
+        # Look for DealNews-specific pagination patterns - updated for 2025
         ajax_pagination_patterns = [
-            'a[href*="page="]',
-            'a[href*="p="]', 
-            'a[href*="offset="]',
-            'a[href*="start="]',
-            '.pagination a',
-            '.pager a',
-            '.page-numbers a',
-            '.pagination-next',
-            '.pagination-prev'
+            'a[href*="?start="]',  # DealNews current pattern
+            'a[href*="&start="]',  # DealNews current pattern
+            '.pagination a[href*="start="]',
+            '.pager a[href*="start="]',
+            '.page-numbers a[href*="start="]',
+            # More specific patterns
+            'a[href*="start="][href*="e=1"]',  # With category filter
+            'a[href*="start="][href*="pf=1"]',  # With staff pick filter
         ]
         
         pagination_found = 0
         for pattern in ajax_pagination_patterns:
             pagination_links = response.css(pattern + '::attr(href)').getall()
-            for link in pagination_links[:10]:  # Limit to first 10 pagination links
+            for link in pagination_links[:5]:  # Reduced to first 5 pagination links
                 if link and self.is_valid_dealnews_url(link):
-                    self.logger.info(f"Found pagination link: {link}")
-                    yield response.follow(link, self.parse, errback=self.errback_http)
-                    pagination_found += 1
+                    # Avoid old pagination patterns that cause 404s
+                    if 'start=' in link and not any(x in link for x in ['page=', 'offset=', 'p=']):
+                        self.logger.info(f"Found pagination link: {link}")
+                        yield response.follow(link, self.parse, errback=self.errback_http)
+                        pagination_found += 1
         
-        # Look for "Load More" or "Show More" buttons
+        # Look for "Load More" or "Show More" buttons - avoid generic selectors
         load_more_selectors = [
-            'button[data-url]',
-            '.load-more',
-            '.show-more',
-            '.pagination-load-more',
-            'a[href*="load"]',
-            'a[href*="more"]'
+            'button[data-url*="start="]',  # DealNews specific pattern
+            '.load-more[href*="start="]',
+            '.show-more[href*="start="]',
+            '.pagination-load-more[href*="start="]',
+            # Be more specific to avoid 404s
+            'a[href*="start="]:not([href*="javascript"]):not([href*="mailto"])'
         ]
         
         load_more_found = 0
         for selector in load_more_selectors:
             load_more_buttons = response.css(selector)
-            for button in load_more_buttons[:5]:  # Limit to first 5 load more buttons
-                data_url = button.css('::attr(data-url)').get()
-                if data_url:
+            for button in load_more_buttons[:3]:  # Reduced to first 3 load more buttons
+                data_url = button.css('::attr(data-url)').get() or button.css('::attr(href)').get()
+                if data_url and 'start=' in data_url:
                     self.logger.info(f"Found load more button: {data_url}")
                     yield response.follow(data_url, self.parse, errback=self.errback_http)
                     load_more_found += 1
         
-        # Also look for traditional pagination links
-        pagination_links = response.css('.pagination a::attr(href), .pager a::attr(href)').getall()
+        # Also look for traditional pagination links - but only with start= pattern
+        pagination_links = response.css('.pagination a[href*="start="]::attr(href), .pager a[href*="start="]::attr(href)').getall()
         valid_pagination_links = 0
-        for link in pagination_links[:100]:  # More reasonable limit
-            if link and ('page=' in link or 'p=' in link) and self.is_valid_dealnews_url(link):
+        for link in pagination_links[:5]:  # Much more reasonable limit
+            if link and 'start=' in link and not any(x in link for x in ['page=', 'offset=', 'p=']):
                 self.logger.info(f"Found pagination link: {link}")
                 yield response.follow(link, self.parse, errback=self.errback_http)
                 valid_pagination_links += 1
         
-        # Look for "Load More" or infinite scroll endpoints
-        load_more_data = response.css('button[data-url]::attr(data-url)').getall()
+        # Look for "Load More" or infinite scroll endpoints - only with start= pattern
+        load_more_data = response.css('button[data-url*="start="]::attr(data-url)').getall()
         valid_load_more_data = 0
-        for data_url in load_more_data[:50]:  # More reasonable limit
-            if data_url:
+        for data_url in load_more_data[:3]:  # Much more reasonable limit
+            if data_url and 'start=' in data_url:
                 self.logger.info(f"Found load more data: {data_url}")
                 yield response.follow(data_url, self.parse, errback=self.errback_http)
                 valid_load_more_data += 1

@@ -19,12 +19,13 @@ AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0  # Very conservative concurrency
 # Randomize delay between requests
 RANDOMIZE_DOWNLOAD_DELAY = True  # Enable randomization to avoid detection
 
-# Reliability controls for 100% success rate
+# Reliability controls for 100% success rate - improved for connection issues
 RETRY_ENABLED = True  # Enable retries for reliability
-RETRY_TIMES = 5  # Reduced retries to avoid hammering
-DOWNLOAD_TIMEOUT = 30  # Much longer timeout to handle slow pages
-CONCURRENT_REQUESTS = 4  # Very conservative concurrent requests (reduced from 8)
-CONCURRENT_REQUESTS_PER_DOMAIN = 2  # Very conservative domain concurrency (reduced from 4)
+RETRY_TIMES = 3  # Reduced retries to avoid hammering
+DOWNLOAD_TIMEOUT = 60  # Increased timeout for slow connections
+CONCURRENT_REQUESTS = 2  # Very conservative concurrent requests (reduced further)
+CONCURRENT_REQUESTS_PER_DOMAIN = 1  # Very conservative domain concurrency (reduced further)
+REACTOR_THREADPOOL_SIZE = 10  # Increase thread pool for better connection handling
 
 DOWNLOADER_MIDDLEWARES = {
     # Enable improved custom middleware
