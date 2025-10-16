@@ -16,19 +16,39 @@ class NormalizedMySQLPipeline:
                 spider.logger.info("MySQL pipeline disabled by DISABLE_MYSQL flag")
                 self.mysql_enabled = False
                 return
-            
+
             self.mysql_enabled = True
             spider.logger.info("Normalized MySQL pipeline enabled - attempting connection...")
-            
+
             # Get MySQL connection settings
             mysql_host = os.getenv('MYSQL_HOST', 'localhost')
             mysql_port = int(os.getenv('MYSQL_PORT', '3306'))
             mysql_user = os.getenv('MYSQL_USER', 'root')
             mysql_password = os.getenv('MYSQL_PASSWORD', 'root')
             mysql_database = os.getenv('MYSQL_DATABASE', 'dealnews')
-            
+
             spider.logger.info(f"Connecting to MySQL: {mysql_host}:{mysql_port} as {mysql_user} to database {mysql_database}")
-            
+
+            # Test connection first
+            try:
+                test_conn = mysql.connector.connect(
+                    host=mysql_host,
+                    port=mysql_port,
+                    user=mysql_user,
+                    password=mysql_password,
+                    database=mysql_database,
+                    connection_timeout=10
+                )
+                test_conn.close()
+                spider.logger.info("✅ MySQL connection test successful")
+            except mysql.connector.Error as conn_err:
+                spider.logger.error(f"❌ MySQL connection failed: {conn_err}")
+                spider.logger.info("Disabling MySQL pipeline - data will only be exported to JSON/CSV")
+                spider.logger.info("To enable MySQL: 1) Start MySQL server, 2) Update .env with correct credentials")
+                self.mysql_enabled = False
+                return
+
+            # If connection test passed, create main connection
             self.conn = mysql.connector.connect(
                 host=mysql_host,
                 port=mysql_port,
@@ -42,31 +62,29 @@ class NormalizedMySQLPipeline:
                 pool_size=5,
                 pool_reset_session=True
             )
-            
+
             self.cursor = self.conn.cursor()
             spider.logger.info("✅ Normalized MySQL connection successful")
-            
+
             # Create tables if they don't exist
             self.create_tables_if_not_exist()
-            
+
             # Check if we should clear existing data
             clear_data = os.getenv('CLEAR_DATA', 'false').lower() in ('1', 'true', 'yes')
             if clear_data:
                 spider.logger.info("🔄 CLEAR_DATA=true - Clearing all existing data...")
                 self.clear_all_data()
                 spider.logger.info("✅ All existing data cleared")
-            
+
             # Initialize counters
             self.deals_saved = 0
             self.related_deals_saved = 0
             self.images_saved = 0
             self.categories_saved = 0
-            
-        except mysql.connector.Error as err:
-            spider.logger.error(f"❌ MySQL connection failed: {err}")
-            self.mysql_enabled = False
+
         except Exception as e:
-            spider.logger.error(f"❌ Unexpected error: {e}")
+            spider.logger.error(f"❌ Unexpected error in pipeline setup: {e}")
+            spider.logger.info("Disabling MySQL pipeline - data will only be exported to JSON/CSV")
             self.mysql_enabled = False
     
     def create_tables_if_not_exist(self):

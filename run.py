@@ -218,16 +218,24 @@ def main():
     # Step 3: Create database if it doesn't exist
     mysql_enabled = os.getenv('DISABLE_MYSQL', '').lower() not in ('1', 'true', 'yes')
     if mysql_enabled:
-        if not create_database_if_not_exists():
-            print("\n[ERROR] Database creation failed. Exiting.")
-            print("[TIP] Set DISABLE_MYSQL=true in .env to run without database")
-            sys.exit(1)
-        
-        # Step 4: Test MySQL connection
-        if not test_mysql_connection():
-            print("\n[ERROR] MySQL connection test failed. Exiting.")
-            print("[TIP] Set DISABLE_MYSQL=true in .env to run without database")
-            sys.exit(1)
+        try:
+            if not create_database_if_not_exists():
+                print("\n[WARNING] Database creation failed.")
+                print("[INFO] Setting DISABLE_MYSQL=true and continuing without database")
+                os.environ['DISABLE_MYSQL'] = 'true'
+                mysql_enabled = False
+            else:
+                # Step 4: Test MySQL connection
+                if not test_mysql_connection():
+                    print("\n[WARNING] MySQL connection test failed.")
+                    print("[INFO] Setting DISABLE_MYSQL=true and continuing without database")
+                    os.environ['DISABLE_MYSQL'] = 'true'
+                    mysql_enabled = False
+        except Exception as e:
+            print(f"\n[WARNING] Database setup error: {e}")
+            print("[INFO] Setting DISABLE_MYSQL=true and continuing without database")
+            os.environ['DISABLE_MYSQL'] = 'true'
+            mysql_enabled = False
     
     print("\n[SUCCESS] All checks passed! Starting scraper...")
     print("=" * 50)

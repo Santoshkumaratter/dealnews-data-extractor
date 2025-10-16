@@ -213,6 +213,8 @@ class DealnewsSpider(scrapy.Spider):
             if found_deals:
                 self.logger.info(f"Found {len(found_deals)} deals with selector: {selector}")
                 deals.extend(found_deals)
+            else:
+                self.logger.debug(f"No deals found with selector: {selector}")
         
         # Remove duplicates while preserving order
         seen = set()
