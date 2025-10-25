@@ -10,21 +10,21 @@ ROBOTSTXT_OBEY = False
 # Fix Scrapy deprecation warning
 REQUEST_FINGERPRINTER_IMPLEMENTATION = '2.7'
 
-# OPTIMIZED settings for 100% reliability with NO 403 errors
-DOWNLOAD_DELAY = 3.0  # Higher delay to prevent 403 errors
-AUTOTHROTTLE_ENABLED = True  # Enable auto-throttling for better reliability
-AUTOTHROTTLE_START_DELAY = 5.0  # Start with 5 second delay
-AUTOTHROTTLE_MAX_DELAY = 10.0  # Max 10 second delay
-AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0  # Very conservative concurrency
+# ULTRA-CONSERVATIVE settings for maximum reliability
+DOWNLOAD_DELAY = 2.0  # Higher delay to avoid blocking
+AUTOTHROTTLE_ENABLED = True  # Enable auto-throttling for reliability
+AUTOTHROTTLE_START_DELAY = 3  # Start with 3 second delay
+AUTOTHROTTLE_MAX_DELAY = 10  # Max 10 second delay
+AUTOTHROTTLE_TARGET_CONCURRENCY = 2.0  # Very conservative concurrency
 # Randomize delay between requests
 RANDOMIZE_DOWNLOAD_DELAY = True  # Enable randomization to avoid detection
 
-# Reliability controls for 100% success rate - improved for connection issues
+# Ultra-conservative controls for maximum reliability
 RETRY_ENABLED = True  # Enable retries for reliability
 RETRY_TIMES = 3  # Reduced retries to avoid hammering
-DOWNLOAD_TIMEOUT = 60  # Increased timeout for slow connections
-CONCURRENT_REQUESTS = 2  # Very conservative concurrent requests (reduced further)
-CONCURRENT_REQUESTS_PER_DOMAIN = 1  # Very conservative domain concurrency (reduced further)
+DOWNLOAD_TIMEOUT = 60  # Higher timeout for reliability
+CONCURRENT_REQUESTS = 4  # Very conservative concurrent requests
+CONCURRENT_REQUESTS_PER_DOMAIN = 2  # Very conservative domain concurrency
 REACTOR_THREADPOOL_SIZE = 10  # Increase thread pool for better connection handling
 
 DOWNLOADER_MIDDLEWARES = {

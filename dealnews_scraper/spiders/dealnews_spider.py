@@ -51,6 +51,31 @@ class DealnewsSpider(scrapy.Spider):
         "https://www.dealnews.com/?start=460",  # Peta deep
         "https://www.dealnews.com/?start=480",  # Exa deep
         "https://www.dealnews.com/?start=500",  # Zetta deep
+        "https://www.dealnews.com/?start=520",  # Yotta deep
+        "https://www.dealnews.com/?start=540",  # Bronto deep
+        "https://www.dealnews.com/?start=560",  # Geop deep
+        "https://www.dealnews.com/?start=580",  # Sagan deep
+        "https://www.dealnews.com/?start=600",  # Peta deep
+        "https://www.dealnews.com/?start=620",  # Exa deep
+        "https://www.dealnews.com/?start=640",  # Zetta deep
+        "https://www.dealnews.com/?start=660",  # Yotta deep
+        "https://www.dealnews.com/?start=680",  # Bronto deep
+        "https://www.dealnews.com/?start=700",  # Geop deep
+        "https://www.dealnews.com/?start=720",  # Sagan deep
+        "https://www.dealnews.com/?start=740",  # Peta deep
+        "https://www.dealnews.com/?start=760",  # Exa deep
+        "https://www.dealnews.com/?start=780",  # Zetta deep
+        "https://www.dealnews.com/?start=800",  # Yotta deep
+        "https://www.dealnews.com/?start=820",  # Bronto deep
+        "https://www.dealnews.com/?start=840",  # Geop deep
+        "https://www.dealnews.com/?start=860",  # Sagan deep
+        "https://www.dealnews.com/?start=880",  # Peta deep
+        "https://www.dealnews.com/?start=900",  # Exa deep
+        "https://www.dealnews.com/?start=920",  # Zetta deep
+        "https://www.dealnews.com/?start=940",  # Yotta deep
+        "https://www.dealnews.com/?start=960",  # Bronto deep
+        "https://www.dealnews.com/?start=980",  # Geop deep
+        "https://www.dealnews.com/?start=1000",  # Sagan deep
         
         # Electronics - comprehensive coverage
         "https://www.dealnews.com/c142/Electronics/",
@@ -859,7 +884,7 @@ class DealnewsSpider(scrapy.Spider):
         pagination_found = 0
         for pattern in ajax_pagination_patterns:
             pagination_links = response.css(pattern + '::attr(href)').getall()
-            for link in pagination_links[:200]:  # Increased to 200 pagination links for 200,000+ deals
+            for link in pagination_links[:500]:  # Increased to 500 pagination links for 200,000+ deals
                 if link and self.is_valid_dealnews_url(link):
                     # Avoid old pagination patterns that cause 404s
                     if 'start=' in link and not any(x in link for x in ['page=', 'offset=', 'p=']):
@@ -880,7 +905,7 @@ class DealnewsSpider(scrapy.Spider):
         load_more_found = 0
         for selector in load_more_selectors:
             load_more_buttons = response.css(selector)
-            for button in load_more_buttons[:100]:  # Increased to 100 load more buttons for 200,000+ deals
+            for button in load_more_buttons[:300]:  # Increased to 300 load more buttons for 200,000+ deals
                 data_url = button.css('::attr(data-url)').get() or button.css('::attr(href)').get()
                 if data_url and 'start=' in data_url:
                     self.logger.info(f"Found load more button: {data_url}")
@@ -890,7 +915,7 @@ class DealnewsSpider(scrapy.Spider):
         # Also look for traditional pagination links - but only with start= pattern
         pagination_links = response.css('.pagination a[href*="start="]::attr(href), .pager a[href*="start="]::attr(href)').getall()
         valid_pagination_links = 0
-        for link in pagination_links[:150]:  # Increased to 150 pagination links for 200,000+ deals
+        for link in pagination_links[:400]:  # Increased to 400 pagination links for 200,000+ deals
             if link and 'start=' in link and not any(x in link for x in ['page=', 'offset=', 'p=']):
                 self.logger.info(f"Found pagination link: {link}")
                 yield response.follow(link, self.parse, errback=self.errback_http)
