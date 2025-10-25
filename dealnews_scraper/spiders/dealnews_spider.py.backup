@@ -16,106 +16,11 @@ class DealnewsSpider(scrapy.Spider):
         self.start_time = time.time()
         self.max_deals = 1000000  # Maximum limit - 1,000,000+ deals for complete data extraction
     
-    # COMPREHENSIVE URLs FOR MAXIMUM DATA EXTRACTION - 200,000+ DEALS
+    # CURRENT WORKING URLs - UPDATED 2025
     start_urls = [
         # Main pages - verified working
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
-        
-        # Add more comprehensive URLs for 200,000+ deals
-        "https://www.dealnews.com/?e=1",  # All deals with filters
-        "https://www.dealnews.com/?pf=1",  # Staff picks
-        "https://www.dealnews.com/?start=0",  # Start from beginning
-        "https://www.dealnews.com/?start=20",  # Next page
-        "https://www.dealnews.com/?start=40",  # More pages
-        "https://www.dealnews.com/?start=60",  # Even more pages
-        "https://www.dealnews.com/?start=80",  # Continue pagination
-        "https://www.dealnews.com/?start=100",  # Deep pagination
-        "https://www.dealnews.com/?start=120",  # More deep pagination
-        "https://www.dealnews.com/?start=140",  # Even more
-        "https://www.dealnews.com/?start=160",  # Continue
-        "https://www.dealnews.com/?start=180",  # More
-        "https://www.dealnews.com/?start=200",  # Deep
-        "https://www.dealnews.com/?start=220",  # Deeper
-        "https://www.dealnews.com/?start=240",  # Even deeper
-        "https://www.dealnews.com/?start=260",  # Much deeper
-        "https://www.dealnews.com/?start=280",  # Very deep
-        "https://www.dealnews.com/?start=300",  # Extremely deep
-        "https://www.dealnews.com/?start=320",  # Maximum depth
-        "https://www.dealnews.com/?start=340",  # Beyond maximum
-        "https://www.dealnews.com/?start=360",  # Ultra deep
-        "https://www.dealnews.com/?start=380",  # Super deep
-        "https://www.dealnews.com/?start=400",  # Mega deep
-        "https://www.dealnews.com/?start=420",  # Giga deep
-        "https://www.dealnews.com/?start=440",  # Tera deep
-        "https://www.dealnews.com/?start=460",  # Peta deep
-        "https://www.dealnews.com/?start=480",  # Exa deep
-        "https://www.dealnews.com/?start=500",  # Zetta deep
-        
-        # Electronics - comprehensive coverage
-        "https://www.dealnews.com/c142/Electronics/",
-        "https://www.dealnews.com/c147/Electronics/Audio-Components/Speakers/",
-        "https://www.dealnews.com/c148/Electronics/Audio-Components/Home-Theater-Systems/",
-        "https://www.dealnews.com/c155/Electronics/Audio-Components/Headphones/",
-        "https://www.dealnews.com/c159/Electronics/TVs/",
-        "https://www.dealnews.com/c168/Electronics/Cameras/Digital-Cameras/",
-        "https://www.dealnews.com/c171/Electronics/Phones-Cell-Phones/",
-        "https://www.dealnews.com/c452/Electronics/Streaming-Media-Players/",
-        "https://www.dealnews.com/c491/Electronics/Phones-Cell-Phones/Apple-iPhones/",
-        "https://www.dealnews.com/c672/Electronics/Phones-Cell-Phones/Android-Phones/",
-        
-        # Computers - comprehensive coverage
-        "https://www.dealnews.com/c49/Computers/Laptops/",
-        "https://www.dealnews.com/c50/Computers/Desktops/",
-        "https://www.dealnews.com/c51/Computers/Tablets/",
-        "https://www.dealnews.com/c52/Computers/Computer-Accessories/",
-        "https://www.dealnews.com/c53/Computers/Software/",
-        "https://www.dealnews.com/c54/Computers/Networking/",
-        
-        # Home & Garden - comprehensive coverage
-        "https://www.dealnews.com/c196/Home-Garden/",
-        "https://www.dealnews.com/c197/Home-Garden/Tools-Hardware/",
-        "https://www.dealnews.com/c200/Home-Garden/Decor/",
-        "https://www.dealnews.com/c304/Home-Garden/Appliances/",
-        "https://www.dealnews.com/c607/Home-Garden/Appliances/Household-Items/Air-Conditioners/",
-        
-        # Clothing & Accessories - comprehensive coverage
-        "https://www.dealnews.com/c202/Clothing-Accessories/",
-        "https://www.dealnews.com/c280/Clothing-Accessories/Shoes/",
-        "https://www.dealnews.com/c275/Clothing-Accessories/Accessories/",
-        "https://www.dealnews.com/c487/Clothing-Accessories/Activewear/",
-        "https://www.dealnews.com/c489/Clothing-Accessories/Coats/",
-        "https://www.dealnews.com/c721/Clothing-Accessories/T-Shirts/",
-        
-        # Gaming & Toys - comprehensive coverage
-        "https://www.dealnews.com/c189/Gaming-Toys/Computer-Games/PC-Games/",
-        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/",
-        "https://www.dealnews.com/c714/Gaming-Toys/Video-Games/Consoles/",
-        "https://www.dealnews.com/c192/Gaming-Toys/Toys/",
-        
-        # Sports & Fitness - comprehensive coverage
-        "https://www.dealnews.com/c298/Sports-Fitness/Camping-Outdoors/",
-        "https://www.dealnews.com/c299/Sports-Fitness/Exercise-Fitness/",
-        "https://www.dealnews.com/c300/Sports-Fitness/Outdoor-Gear/",
-        
-        # Health & Beauty - comprehensive coverage
-        "https://www.dealnews.com/c765/Health-Beauty/Health/",
-        "https://www.dealnews.com/c766/Health-Beauty/Beauty/",
-        "https://www.dealnews.com/c767/Health-Beauty/Personal-Care/",
-        
-        # Automotive - comprehensive coverage
-        "https://www.dealnews.com/c145/Automotive/Car-Audio/",
-        "https://www.dealnews.com/c146/Automotive/Car-Parts/",
-        "https://www.dealnews.com/c147/Automotive/Car-Accessories/",
-        
-        # Office & School Supplies - comprehensive coverage
-        "https://www.dealnews.com/c281/Office-School-Supplies/Supplies/",
-        "https://www.dealnews.com/c649/Office-School-Supplies/Office-Furniture/Office-Chairs/",
-        
-        # Movies, Music, Books - comprehensive coverage
-        "https://www.dealnews.com/c500/Movies-Music-Books/Movies-TV-Shows-Videos/",
-        "https://www.dealnews.com/c501/Movies-Music-Books/Music/",
-        "https://www.dealnews.com/c502/Movies-Music-Books/Books/",
         
         # Electronics - current working URLs
         "https://www.dealnews.com/c142/Electronics/",
@@ -727,10 +632,10 @@ class DealnewsSpider(scrapy.Spider):
             url_category = self.extract_category_from_url(response.url)
             category_value = ''
             for selector in category_selectors:
-                    category = deal.css(selector).get()
-                    if category and category.strip():
-                        category_value = category.strip()
-                        break
+                category = deal.css(selector).get()
+                if category and category.strip():
+                    category_value = category.strip()
+                    break
             if not category_value and url_category:
                 category_value = url_category
             item['category'] = category_value
@@ -859,7 +764,7 @@ class DealnewsSpider(scrapy.Spider):
         pagination_found = 0
         for pattern in ajax_pagination_patterns:
             pagination_links = response.css(pattern + '::attr(href)').getall()
-            for link in pagination_links[:200]:  # Increased to 200 pagination links for 200,000+ deals
+            for link in pagination_links[:5]:  # Reduced to first 5 pagination links
                 if link and self.is_valid_dealnews_url(link):
                     # Avoid old pagination patterns that cause 404s
                     if 'start=' in link and not any(x in link for x in ['page=', 'offset=', 'p=']):
@@ -880,7 +785,7 @@ class DealnewsSpider(scrapy.Spider):
         load_more_found = 0
         for selector in load_more_selectors:
             load_more_buttons = response.css(selector)
-            for button in load_more_buttons[:100]:  # Increased to 100 load more buttons for 200,000+ deals
+            for button in load_more_buttons[:3]:  # Reduced to first 3 load more buttons
                 data_url = button.css('::attr(data-url)').get() or button.css('::attr(href)').get()
                 if data_url and 'start=' in data_url:
                     self.logger.info(f"Found load more button: {data_url}")
@@ -890,7 +795,7 @@ class DealnewsSpider(scrapy.Spider):
         # Also look for traditional pagination links - but only with start= pattern
         pagination_links = response.css('.pagination a[href*="start="]::attr(href), .pager a[href*="start="]::attr(href)').getall()
         valid_pagination_links = 0
-        for link in pagination_links[:150]:  # Increased to 150 pagination links for 200,000+ deals
+        for link in pagination_links[:5]:  # Much more reasonable limit
             if link and 'start=' in link and not any(x in link for x in ['page=', 'offset=', 'p=']):
                 self.logger.info(f"Found pagination link: {link}")
                 yield response.follow(link, self.parse, errback=self.errback_http)
