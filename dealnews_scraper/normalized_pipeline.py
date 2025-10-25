@@ -16,19 +16,19 @@ class NormalizedMySQLPipeline:
                 spider.logger.info("MySQL pipeline disabled by DISABLE_MYSQL flag")
                 self.mysql_enabled = False
                 return
-
+            
             self.mysql_enabled = True
             spider.logger.info("Normalized MySQL pipeline enabled - attempting connection...")
-
+            
             # Get MySQL connection settings
             mysql_host = os.getenv('MYSQL_HOST', 'localhost')
             mysql_port = int(os.getenv('MYSQL_PORT', '3306'))
             mysql_user = os.getenv('MYSQL_USER', 'root')
             mysql_password = os.getenv('MYSQL_PASSWORD', 'root')
             mysql_database = os.getenv('MYSQL_DATABASE', 'dealnews')
-
+            
             spider.logger.info(f"Connecting to MySQL: {mysql_host}:{mysql_port} as {mysql_user} to database {mysql_database}")
-
+            
             # Test connection first
             try:
                 test_conn = mysql.connector.connect(
@@ -62,26 +62,26 @@ class NormalizedMySQLPipeline:
                 pool_size=5,
                 pool_reset_session=True
             )
-
+            
             self.cursor = self.conn.cursor()
             spider.logger.info("✅ Normalized MySQL connection successful")
-
+            
             # Create tables if they don't exist
             self.create_tables_if_not_exist()
-
+            
             # Check if we should clear existing data
             clear_data = os.getenv('CLEAR_DATA', 'false').lower() in ('1', 'true', 'yes')
             if clear_data:
                 spider.logger.info("🔄 CLEAR_DATA=true - Clearing all existing data...")
                 self.clear_all_data()
                 spider.logger.info("✅ All existing data cleared")
-
+            
             # Initialize counters
             self.deals_saved = 0
             self.related_deals_saved = 0
             self.images_saved = 0
             self.categories_saved = 0
-
+            
         except Exception as e:
             spider.logger.error(f"❌ Unexpected error in pipeline setup: {e}")
             spider.logger.info("Disabling MySQL pipeline - data will only be exported to JSON/CSV")
@@ -680,7 +680,7 @@ class NormalizedMySQLPipeline:
                     category_id = self.get_category_id(category)
                     if category_id:
                         self.save_deal_category(dealid, category_id)
-                        deal_categories_populated += 1
+                    deal_categories_populated += 1
                 
                 # Extract and populate collections
                 collection = self.extract_collection_from_url(url)
@@ -787,11 +787,11 @@ class NormalizedMySQLPipeline:
             )
         except Exception:
             # Extended schema fallback
-            try:
-                self.cursor.execute(
-                    "INSERT IGNORE INTO collections (collection_name, collection_url) VALUES (%s, %s)",
+        try:
+            self.cursor.execute(
+                "INSERT IGNORE INTO collections (collection_name, collection_url) VALUES (%s, %s)",
                     (collection_name, collection_url or '')
-                )
+            )
             except Exception:
                 pass
     

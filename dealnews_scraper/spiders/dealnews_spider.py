@@ -21,7 +21,7 @@ class DealnewsSpider(scrapy.Spider):
         # Main pages - verified working
         "https://www.dealnews.com/",
         "https://www.dealnews.com/online-stores/",
-
+        
         # Electronics - current working URLs
         "https://www.dealnews.com/c142/Electronics/",
         "https://www.dealnews.com/c147/Electronics/Audio-Components/Speakers/",
@@ -182,7 +182,7 @@ class DealnewsSpider(scrapy.Spider):
             '[data-deal-id]',  # Real deals have data-deal-id
             '[data-rec-id]',   # Real deals have data-rec-id
             '.deal-item',      # Main deal container
-            '.deal-card',
+            '.deal-card', 
             '.deal-tile',
             '.deal-container',
             '.deal-wrapper',
@@ -249,6 +249,207 @@ class DealnewsSpider(scrapy.Spider):
         elapsed_time = time.time() - self.start_time
         rate = self.deals_extracted / elapsed_time if elapsed_time > 0 else 0
         self.logger.info(f"Progress: {self.deals_extracted} deals extracted in {elapsed_time:.1f}s (rate: {rate:.1f} deals/sec)")
+        
+        # Also extract deals from JSON-LD structured data (new DealNews format)
+        yield from self.parse_json_ld_deals(response)
+
+    def parse_json_ld_deals(self, response):
+        """Extract deals from JSON-LD structured data (new DealNews format)"""
+        import json
+        
+        # Look for JSON-LD structured data in script tags
+        json_scripts = response.css('script[type="application/ld+json"]::text').getall()
+        json_deals = []
+        
+        for script_content in json_scripts:
+            try:
+                data = json.loads(script_content)
+                if isinstance(data, dict) and data.get('@type') == 'Offer':
+                    json_deals.append(data)
+                elif isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and item.get('@type') == 'Offer':
+                            json_deals.append(item)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        
+        self.logger.info(f"Found {len(json_deals)} JSON-LD deals on {response.url}")
+        
+        for deal_data in json_deals:
+            if self.deals_extracted >= self.max_deals:
+                self.logger.info(f"Reached maximum deals limit: {self.max_deals}")
+                return
+            
+            item = self.extract_deal_from_json(deal_data, response)
+            if item:
+                self.deals_extracted += 1
+                yield item
+                
+                # Extract related data
+                yield from self.extract_deal_images_from_json(deal_data, item)
+                yield from self.extract_deal_categories_from_json(deal_data, item)
+                yield from self.extract_related_deals_from_json(deal_data, item)
+
+    def extract_deal_from_json(self, deal_data, response):
+        """Extract deal item from JSON-LD structured data"""
+        import json
+        try:
+            item = DealnewsItem()
+            
+            # Extract basic information from JSON-LD
+            item['dealid'] = deal_data.get('id', f"json_deal_{hash(str(deal_data))}")
+            item['title'] = deal_data.get('name', '')
+            item['detail'] = deal_data.get('description', '')  # Use 'detail' instead of 'description'
+            item['price'] = deal_data.get('price', '')
+            item['url'] = deal_data.get('url', response.url)
+            
+            # Extract category information
+            category = deal_data.get('category', {})
+            if isinstance(category, dict):
+                item['category'] = category.get('name', '')
+            
+            # Extract availability information (store in detail field)
+            availability = deal_data.get('availability', '')
+            availability_starts = deal_data.get('availabilityStarts', '')
+            availability_ends = deal_data.get('availabilityEnds', '')
+            
+            # Extract image information (store in images field)
+            image = deal_data.get('image', {})
+            if isinstance(image, dict):
+                image_url = image.get('url', '')
+            elif isinstance(image, str):
+                image_url = image
+            else:
+                image_url = ''
+            
+            # Extract store information
+            seller = deal_data.get('seller', {})
+            if isinstance(seller, dict):
+                item['store'] = seller.get('name', '')
+            
+            # Set default values for missing fields
+            item['recid'] = ''
+            item['deal'] = ''
+            item['dealplus'] = ''
+            item['promo'] = ''
+            item['deallink'] = item['url']
+            item['dealtext'] = item['detail']
+            item['dealhover'] = ''
+            item['staffpick'] = ''
+            item['start_date'] = availability_starts
+            item['raw_html'] = f'<div class="json-ld-deal">{json.dumps(deal_data)}</div>'
+            
+            # Store additional data in supported fields
+            if image_url:
+                item['images'] = [image_url]
+            else:
+                item['images'] = []
+                
+            # Store availability info in detail
+            if availability or availability_starts or availability_ends:
+                availability_info = f"Availability: {availability}"
+                if availability_starts:
+                    availability_info += f", Starts: {availability_starts}"
+                if availability_ends:
+                    availability_info += f", Ends: {availability_ends}"
+                item['detail'] = f"{item['detail']}\n{availability_info}"
+            
+            # Extract filter variables
+            filter_vars = self.extract_filter_variables_from_json(deal_data)
+            item.update(filter_vars)
+            
+            return item
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting deal from JSON: {e}")
+            return None
+
+    def extract_filter_variables_from_json(self, deal_data):
+        """Extract filter variables from JSON-LD data"""
+        filter_vars = {
+            'offer_type': '',
+            'condition': '',
+            'events': '',
+            'brand': '',
+            'collection': '',
+            'offer_status': '',
+            'include_expired': False,
+            'max_price': '',
+            'popularity_rank': 0
+        }
+        
+        # Extract offer type from category or description
+        category = deal_data.get('category', {})
+        if isinstance(category, dict):
+            category_name = category.get('name', '').lower()
+            if 'sale' in category_name or 'clearance' in category_name:
+                filter_vars['offer_type'] = 'sale'
+            elif 'coupon' in category_name or 'promo' in category_name:
+                filter_vars['offer_type'] = 'coupon'
+            elif 'rebate' in category_name:
+                filter_vars['offer_type'] = 'rebate'
+        
+        # Extract brand from seller or category
+        seller = deal_data.get('seller', {})
+        if isinstance(seller, dict):
+            seller_name = seller.get('name', '')
+            if seller_name:
+                filter_vars['brand'] = seller_name
+        
+        # Extract condition from description
+        description = deal_data.get('description', '').lower()
+        if 'new' in description:
+            filter_vars['condition'] = 'new'
+        elif 'used' in description or 'refurbished' in description:
+            filter_vars['condition'] = 'used'
+        elif 'open box' in description:
+            filter_vars['condition'] = 'open_box'
+        
+        # Extract price for max_price
+        price = deal_data.get('price', '')
+        if price and '$' in price:
+            try:
+                price_num = float(price.replace('$', '').replace(',', ''))
+                filter_vars['max_price'] = price_num
+            except ValueError:
+                pass
+        
+        return filter_vars
+
+    def extract_deal_images_from_json(self, deal_data, item):
+        """Extract deal images from JSON-LD data"""
+        try:
+            image = deal_data.get('image', {})
+            if isinstance(image, dict) and image.get('url'):
+                image_item = DealImageItem()
+                image_item['dealid'] = item['dealid']
+                image_item['imageurl'] = image['url']
+                yield image_item
+            elif isinstance(image, str) and image:
+                image_item = DealImageItem()
+                image_item['dealid'] = item['dealid']
+                image_item['imageurl'] = image
+                yield image_item
+        except Exception as e:
+            self.logger.error(f"Error extracting images from JSON: {e}")
+
+    def extract_deal_categories_from_json(self, deal_data, item):
+        """Extract deal categories from JSON-LD data"""
+        try:
+            category = deal_data.get('category', {})
+            if isinstance(category, dict) and category.get('name'):
+                category_item = DealCategoryItem()
+                category_item['dealid'] = item['dealid']
+                category_item['category_name'] = category['name']
+                yield category_item
+        except Exception as e:
+            self.logger.error(f"Error extracting categories from JSON: {e}")
+
+    def extract_related_deals_from_json(self, deal_data, item):
+        """Extract related deals from JSON-LD data"""
+        # JSON-LD doesn't typically contain related deals, so this is a placeholder
+        return
+        yield  # This makes it a generator
 
     def extract_deal_item(self, deal, response):
         """Extract main deal item with IMPROVED SELECTORS"""
@@ -308,7 +509,7 @@ class DealnewsSpider(scrapy.Spider):
                 '.deal-content h4::text',
                 '.deal-content .title::text',
                 # Generic fallbacks
-                '.title::text',
+                '.title::text', 
                 'h1::text',
                 'h2::text',
                 'h3::text',
@@ -471,7 +672,7 @@ class DealnewsSpider(scrapy.Spider):
                 item['related_deals'] = deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall()
             except Exception:
                 item['related_deals'] = []
-
+            
             return item
             
         except Exception as e:
