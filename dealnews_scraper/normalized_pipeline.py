@@ -5,7 +5,14 @@ import logging
 from dealnews_scraper.items import DealnewsItem, DealImageItem, DealCategoryItem, RelatedDealItem
 
 class NormalizedMySQLPipeline:
-    """Normalized pipeline for storing scraped items in normalized MySQL database tables."""
+    """MySQL pipeline that stores all deal data in normalized tables.
+    
+    Tables:
+    - deals: Main deal information
+    - deal_images: Multiple images per deal (unique constraint on dealid+imageurl)
+    - deal_categories: Multiple categories per deal
+    - related_deals: Multiple related deals per deal (unique constraint on dealid+relatedurl)
+    """
     
     def open_spider(self, spider):
         try:
@@ -56,7 +63,7 @@ class NormalizedMySQLPipeline:
                 password=mysql_password,
                 database=mysql_database,
                 use_pure=True,
-                connection_timeout=60,  # Increased timeout
+                connection_timeout=60,
                 autocommit=True,
                 pool_name='dealnews_pool',
                 pool_size=5,
@@ -66,8 +73,8 @@ class NormalizedMySQLPipeline:
             self.cursor = self.conn.cursor()
             spider.logger.info("✅ Normalized MySQL connection successful")
             
-            # Create tables if they don't exist
-            self.create_tables_if_not_exist()
+            # Create all tables
+            self.create_all_tables()
             
             # Check if we should clear existing data
             clear_data = os.getenv('CLEAR_DATA', 'false').lower() in ('1', 'true', 'yes')
@@ -78,23 +85,50 @@ class NormalizedMySQLPipeline:
             
             # Initialize counters
             self.deals_saved = 0
-            self.related_deals_saved = 0
             self.images_saved = 0
             self.categories_saved = 0
+            self.related_deals_saved = 0
             
         except Exception as e:
             spider.logger.error(f"❌ Unexpected error in pipeline setup: {e}")
             spider.logger.info("Disabling MySQL pipeline - data will only be exported to JSON/CSV")
             self.mysql_enabled = False
     
-    def create_tables_if_not_exist(self):
-        """Create all normalized tables if they don't exist"""
+    def create_all_tables(self):
+        """Create all normalized tables if they don't exist."""
         try:
-            # 1. Main deals table
-            create_deals_table = """
+            # Read SQL file or create tables directly
+            sql_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'mysql-init', '01_create_deals.sql')
+            if os.path.exists(sql_file):
+                with open(sql_file, 'r') as f:
+                    sql_commands = f.read()
+                    # Split by semicolon and execute each command
+                    for command in sql_commands.split(';'):
+                        command = command.strip()
+                        if command:
+                            try:
+                                self.cursor.execute(command)
+                            except mysql.connector.Error as e:
+                                if "already exists" not in str(e).lower():
+                                    print(f"[WARNING] {e}")
+            else:
+                # Fallback: create tables directly
+                self.create_tables_directly()
+            
+            print("[OK] All tables created/verified")
+            print("[SUCCESS] Database schema ready!")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to create tables: {e}")
+            raise
+    
+    def create_tables_directly(self):
+        """Create tables directly if SQL file is not available."""
+        # Main deals table
+        create_deals_table = """
             CREATE TABLE IF NOT EXISTS deals (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                dealid VARCHAR(50) UNIQUE,
+            dealid VARCHAR(50) UNIQUE NOT NULL,
                 recid VARCHAR(50),
                 url TEXT,
                 title TEXT,
@@ -120,158 +154,76 @@ class NormalizedMySQLPipeline:
                 INDEX idx_category (category)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """
-            
-            # 2. Stores table (normalized)
-            create_stores_table = """
-            CREATE TABLE IF NOT EXISTS stores (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                store_name VARCHAR(100) UNIQUE,
-                store_url TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_store_name (store_name)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-            
-            # 3. Categories table (normalized)
-            create_categories_table = """
-            CREATE TABLE IF NOT EXISTS categories (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                category_name VARCHAR(100) UNIQUE,
-                category_url TEXT,
-                category_title VARCHAR(200),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_category_name (category_name)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-            
-            # 4. Brands table (normalized)
-            create_brands_table = """
-            CREATE TABLE IF NOT EXISTS brands (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                brand_name VARCHAR(100) UNIQUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_brand_name (brand_name)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-            
-            # 5. Collections table (normalized)
-            create_collections_table = """
-            CREATE TABLE IF NOT EXISTS collections (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                collection_name VARCHAR(100) UNIQUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_collection_name (collection_name)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-            
-            # 6. Deal images table
-            create_deal_images_table = """
-            CREATE TABLE IF NOT EXISTS deal_images (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                dealid VARCHAR(50),
-                imageurl TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_dealid (dealid),
-                FOREIGN KEY (dealid) REFERENCES deals(dealid) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-            
-            # 7. Deal categories junction table (many-to-many)
-            create_deal_categories_table = """
-            CREATE TABLE IF NOT EXISTS deal_categories (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                dealid VARCHAR(50),
-                category_id INT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_deal_category (dealid, category_id),
-                INDEX idx_dealid (dealid),
-                INDEX idx_category_id (category_id),
-                FOREIGN KEY (dealid) REFERENCES deals(dealid) ON DELETE CASCADE,
-                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-            
-            # 8. Related deals table
-            create_related_deals_table = """
-            CREATE TABLE IF NOT EXISTS related_deals (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                dealid VARCHAR(50),
-                related_dealid VARCHAR(50),
-                related_url TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_dealid (dealid),
-                INDEX idx_related_dealid (related_dealid),
-                FOREIGN KEY (dealid) REFERENCES deals(dealid) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-            
-            # 9. Filter variables table (all the filters from the image)
-            create_filter_variables_table = """
-            CREATE TABLE IF NOT EXISTS deal_filters (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                dealid VARCHAR(50),
-                start_date DATE,
-                max_price DECIMAL(10,2),
-                category_id INT,
-                store_id INT,
-                brand_id INT,
-                offer_type VARCHAR(50),
-                popularity_rank INT,
-                collection_id INT,
-                condition_type VARCHAR(50),
-                events VARCHAR(100),
-                offer_status VARCHAR(50),
-                include_expired BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_dealid (dealid),
-                INDEX idx_offer_type (offer_type),
-                INDEX idx_condition_type (condition_type),
-                INDEX idx_offer_status (offer_status),
-                UNIQUE KEY unique_deal_filter (dealid),
-                FOREIGN KEY (dealid) REFERENCES deals(dealid) ON DELETE CASCADE,
-                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
-                FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL,
-                FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE SET NULL,
-                FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-            
-            # Execute all table creation statements
-            tables = [
-                ("deals", create_deals_table),
-                ("stores", create_stores_table),
-                ("categories", create_categories_table),
-                ("brands", create_brands_table),
-                ("collections", create_collections_table),
-                ("deal_images", create_deal_images_table),
-                ("deal_categories", create_deal_categories_table),
-                ("related_deals", create_related_deals_table),
-                ("deal_filters", create_filter_variables_table)
-            ]
-            
-            for table_name, create_sql in tables:
-                self.cursor.execute(create_sql)
-                print(f"[OK] Table '{table_name}' created/verified")
-            
-            print("[SUCCESS] All 9 normalized tables created/verified successfully!")
-            
+        self.cursor.execute(create_deals_table)
+        
+        # Deal images table (unique constraint prevents duplicates)
+        create_images_table = """
+        CREATE TABLE IF NOT EXISTS deal_images (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            dealid VARCHAR(50) NOT NULL,
+            imageurl TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_deal_image (dealid, imageurl(255)),
+            INDEX idx_dealid (dealid)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """
+        self.cursor.execute(create_images_table)
+        
+        # Deal categories table (multiple categories per deal)
+        create_categories_table = """
+        CREATE TABLE IF NOT EXISTS deal_categories (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            dealid VARCHAR(50) NOT NULL,
+            category_id VARCHAR(100),
+            category_name VARCHAR(255),
+            category_url TEXT,
+            category_title VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_dealid (dealid),
+            INDEX idx_category_name (category_name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """
+        self.cursor.execute(create_categories_table)
+        
+        # Related deals table (unique constraint prevents duplicates)
+        create_related_table = """
+        CREATE TABLE IF NOT EXISTS related_deals (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            dealid VARCHAR(50) NOT NULL,
+            relatedurl TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_related_deal (dealid, relatedurl(255)),
+            INDEX idx_dealid (dealid)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """
+        self.cursor.execute(create_related_table)
+
+    def clear_all_data(self):
+        """Clear all data from all tables"""
+        try:
+            # Clear all tables (no foreign keys, so order doesn't matter)
+            self.cursor.execute("TRUNCATE TABLE related_deals")
+            self.cursor.execute("TRUNCATE TABLE deal_categories")
+            self.cursor.execute("TRUNCATE TABLE deal_images")
+            self.cursor.execute("TRUNCATE TABLE deals")
+            self.conn.commit()
         except Exception as e:
-            print(f"[ERROR] Failed to create tables: {e}")
+            print(f"[ERROR] Failed to clear data: {e}")
             raise
 
     def close_spider(self, spider):
         if self.mysql_enabled:
             spider.logger.info(f"📊 Final stats:")
-            spider.logger.info(f"   Deals saved: {self.deals_saved}")
-            spider.logger.info(f"   Related deals saved: {self.related_deals_saved}")
-            spider.logger.info(f"   Images saved: {self.images_saved}")
-            spider.logger.info(f"   Categories saved: {self.categories_saved}")
+            spider.logger.info(f"   Deals saved: {self.deals_saved:,}")
+            spider.logger.info(f"   Images saved: {self.images_saved:,}")
+            spider.logger.info(f"   Categories saved: {self.categories_saved:,}")
+            spider.logger.info(f"   Related deals saved: {self.related_deals_saved:,}")
             
             if hasattr(self, 'cursor'):
                 self.cursor.close()
             if hasattr(self, 'conn'):
                 self.conn.close()
-            spider.logger.info("🔌 Normalized MySQL connection closed")
+            spider.logger.info("🔌 MySQL connection closed")
 
     def process_item(self, item, spider):
         if not self.mysql_enabled:
@@ -279,13 +231,10 @@ class NormalizedMySQLPipeline:
             
         try:
             if isinstance(item, DealnewsItem):
-                spider.logger.info(f"Processing main deal: {item.get('title', '')[:50]}...")
                 return self.process_deal_item(item, spider)
             elif isinstance(item, DealImageItem):
-                spider.logger.info(f"Processing deal image: {item.get('imageurl', '')[:50]}...")
                 return self.process_image_item(item, spider)
             elif isinstance(item, DealCategoryItem):
-                spider.logger.info(f"Processing deal category: {item.get('category_name', '')}")
                 return self.process_category_item(item, spider)
             elif isinstance(item, RelatedDealItem):
                 return self.process_related_deal_item(item, spider)
@@ -295,33 +244,32 @@ class NormalizedMySQLPipeline:
         return item
 
     def process_deal_item(self, item, spider):
-        """Process main deal item and save to normalized tables"""
+        """Process main deal item and save to deals table"""
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 dealid = item.get('dealid', '')
+                title = item.get('title', '').strip()
+                
                 if not dealid:
-                    spider.logger.warning("Skipping deal without dealid")
+                    spider.logger.debug("Skipping deal without dealid")
                     return item
                 
-                spider.logger.info(f"Processing deal {dealid}: {item.get('title', '')[:50]}...")
+                # Skip obvious non-deal placeholders
+                if dealid.startswith('dealnewsjs') or dealid.startswith('simpleslider'):
+                    spider.logger.debug(f"Skipping placeholder dealid: {dealid}")
+                    return item
                 
-                # Check if deal already exists (unless force update is enabled)
-                force_update = os.getenv('FORCE_UPDATE', 'false').lower() in ('1', 'true', 'yes')
-                clear_data = os.getenv('CLEAR_DATA', 'false').lower() in ('1', 'true', 'yes')
-                capture_mode = os.getenv('CAPTURE_MODE', 'incremental').lower()  # 'full' | 'incremental'
+                url = item.get('url', '').strip()
+                if not url or (url == 'https://www.dealnews.com/' and not dealid):
+                    spider.logger.debug(f"Skipping deal {dealid} with invalid URL: {url}")
+                    return item
                 
-                if force_update or clear_data or capture_mode == 'full':
-                    # Force update mode or clear data mode - delete existing deal first
-                    self.cursor.execute("DELETE FROM deals WHERE dealid = %s", (dealid,))
-                    self.cursor.execute("DELETE FROM deal_filters WHERE dealid = %s", (dealid,))
-                    self.cursor.execute("DELETE FROM related_deals WHERE dealid = %s", (dealid,))
-                    self.cursor.execute("DELETE FROM deal_images WHERE dealid = %s", (dealid,))
-                    self.cursor.execute("DELETE FROM deal_categories WHERE dealid = %s", (dealid,))
-                    spider.logger.info(f"Force update/clear mode: Re-scraping deal {dealid}")
-                # else: no skip; proceed to upsert and process filters/relations
+                if (not title or title == 'No title found') and not (item.get('deallink') or url):
+                    spider.logger.debug(f"Skipping empty item for dealid {dealid}")
+                    return item
                 
-                # 1. Save to main deals table
+                # Save to deals table
                 deal_sql = """
                 INSERT INTO deals (dealid, recid, url, title, price, promo, category, store, deal, dealplus, 
                                  deallink, dealtext, dealhover, published, popularity, staffpick, 
@@ -344,110 +292,61 @@ class NormalizedMySQLPipeline:
                     popularity = VALUES(popularity),
                     staffpick = VALUES(staffpick),
                     detail = VALUES(detail),
-                    raw_html = VALUES(raw_html)
+                    raw_html = VALUES(raw_html),
+                    updated_at = NOW()
                 """
                 
                 deal_values = (
                     dealid,
-                    item.get('recid', ''),
-                    item.get('url', ''),
-                    item.get('title', ''),
-                    item.get('price', ''),
-                    item.get('promo', ''),
-                    item.get('category', ''),
-                    item.get('store', ''),
-                    item.get('deal', ''),
-                    item.get('dealplus', ''),
-                    item.get('deallink', ''),
-                    item.get('dealtext', ''),
-                    item.get('dealhover', ''),
-                    item.get('published', ''),
-                    item.get('popularity', ''),
-                    item.get('staffpick', ''),
-                    item.get('detail', ''),
-                    item.get('raw_html', '')[:10000] if item.get('raw_html') else ''  # Limit HTML size
+                    item.get('recid', '') or '',
+                    url,
+                    title,
+                    item.get('price', '') or '',
+                    item.get('promo', '') or '',
+                    item.get('category', '') or '',
+                    item.get('store', '') or '',
+                    item.get('deal', '') or '',
+                    item.get('dealplus', '') or '',
+                    item.get('deallink', '') or url,
+                    item.get('dealtext', '') or item.get('detail', '') or '',
+                    item.get('dealhover', '') or '',
+                    item.get('published', '') or '',
+                    item.get('popularity', '') or '',
+                    item.get('staffpick', '') or '',
+                    item.get('detail', '') or '',
+                    item.get('raw_html', '')[:50000] if item.get('raw_html') else ''  # Limit raw_html size
                 )
                 
                 self.cursor.execute(deal_sql, deal_values)
-                affected_rows = self.cursor.rowcount
                 self.deals_saved += 1
-                spider.logger.info(f"✅ Successfully saved deal {dealid} to database (total saved: {self.deals_saved}, affected rows: {affected_rows})")
                 
-                # 2. Save store to stores table (normalized)
-                store_name = item.get('store', '')
-                if store_name:
-                    self.save_store(store_name)
-                    store_id = self.get_store_id(store_name)
-                else:
-                    store_id = None
+                # Also save images, categories, and related deals from the main item if present
+                if item.get('images'):
+                    for img_url in item.get('images', []):
+                        if img_url:
+                            self.save_image(dealid, img_url, spider)
                 
-                # 3. Save categories to categories table (normalized)
-                categories = item.get('categories', [])
-                if categories:
-                    for category in categories:
-                        if isinstance(category, dict):
-                            cat_name = category.get('name', '')
-                            cat_url = category.get('url', '')
-                            cat_title = category.get('title', '')
-                        else:
-                            cat_name = str(category)
-                            cat_url = ''
-                            cat_title = ''
-                        
-                        if cat_name:
-                            self.save_category(cat_name, cat_url, cat_title)
-                            category_id = self.get_category_id(cat_name)
-                            self.save_deal_category(dealid, category_id)
+                if item.get('categories'):
+                    for cat in item.get('categories', []):
+                        if isinstance(cat, dict):
+                            self.save_category(dealid, cat, spider)
+                        elif isinstance(cat, str):
+                            self.save_category(dealid, {'category_name': cat}, spider)
                 
-                # 4. Save brand to brands table (normalized)
-                brand_name = item.get('brand', '')
-                if brand_name:
-                    self.save_brand(brand_name)
-                    brand_id = self.get_brand_id(brand_name)
-                else:
-                    brand_id = None
+                if item.get('related_deals'):
+                    for rel_url in item.get('related_deals', []):
+                        if rel_url:
+                            self.save_related_deal(dealid, rel_url, spider)
                 
-                # 5. Save collection to collections table (normalized)
-                collection_name = item.get('collection', '')
-                if collection_name:
-                    self.save_collection(collection_name)
-                    collection_id = self.get_collection_id(collection_name)
-                else:
-                    collection_id = None
+                if self.deals_saved % 100 == 0:
+                    spider.logger.info(f"✅ Saved {self.deals_saved:,} deals, {self.images_saved:,} images, {self.categories_saved:,} categories, {self.related_deals_saved:,} related deals")
                 
-                # 6. Save filter variables to deal_filters table
-                self.save_deal_filters(
-                    dealid=dealid,
-                    store_id=store_id,
-                    brand_id=brand_id,
-                    collection_id=collection_id,
-                    offer_type=item.get('offer_type', ''),
-                    condition_type=item.get('condition', ''),
-                    events=item.get('events', ''),
-                    offer_status=item.get('offer_status', ''),
-                    include_expired=item.get('include_expired', 'No') == 'Yes',
-                    category_id=self.get_category_id(item.get('category', '')),
-                    start_date=item.get('start_date') or None,
-                    max_price=item.get('max_price') or None,
-                    popularity_rank=item.get('popularity_rank') or None
-                )
-                
-                # 7. Save related deals
-                related_deals = item.get('related_deals', [])
-                if related_deals:
-                    for related_url in related_deals[:25]:  # Save up to 25 related
-                        self.save_related_deal(dealid, related_url)
-                        self.related_deals_saved += 1
-                
-                spider.logger.info(f"Saved deal {dealid} with {len(related_deals)} related deals")
                 break  # Success, exit retry loop
                 
             except mysql.connector.Error as err:
                 spider.logger.error(f"❌ MySQL error saving deal (attempt {attempt + 1}/{max_retries}): {err}")
                 if attempt < max_retries - 1:
-                    spider.logger.info(f"Retrying in 2 seconds...")
                     time.sleep(2)
-                    # Try to reconnect
                     try:
                         self.conn.reconnect()
                         self.cursor = self.conn.cursor()
@@ -458,389 +357,90 @@ class NormalizedMySQLPipeline:
             except Exception as e:
                 spider.logger.error(f"❌ Error saving deal (attempt {attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
-                    spider.logger.info(f"Retrying in 2 seconds...")
                     time.sleep(2)
                 else:
                     spider.logger.error(f"❌ Failed to save deal after {max_retries} attempts")
             
         return item
 
-    def save_store(self, store_name):
-        """Save store to stores table"""
-        try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO stores (store_name) VALUES (%s)",
-                (store_name,)
-            )
-        except Exception as e:
-            pass  # Ignore duplicate errors
-
-    def get_store_id(self, store_name):
-        """Get store ID from stores table"""
-        try:
-            self.cursor.execute("SELECT id FROM stores WHERE store_name = %s", (store_name,))
-            result = self.cursor.fetchone()
-            return result[0] if result else None
-        except Exception:
-            return None
-
-    def save_category(self, category_name, category_url, category_title):
-        """Save category to categories table"""
-        try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO categories (category_name, category_url, category_title) VALUES (%s, %s, %s)",
-                (category_name, category_url, category_title)
-            )
-        except Exception as e:
-            pass  # Ignore duplicate errors
-
-    def get_category_id(self, category_name):
-        """Get category ID from categories table"""
-        try:
-            self.cursor.execute("SELECT id FROM categories WHERE category_name = %s", (category_name,))
-            result = self.cursor.fetchone()
-            return result[0] if result else None
-        except Exception:
-            return None
-
-    def save_deal_category(self, dealid, category_id):
-        """Save deal-category relationship"""
-        try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO deal_categories (dealid, category_id) VALUES (%s, %s)",
-                (dealid, category_id)
-            )
-            self.categories_saved += 1
-        except Exception as e:
-            pass  # Ignore duplicate errors
-
-    def save_brand(self, brand_name):
-        """Save brand to brands table"""
-        try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO brands (brand_name) VALUES (%s)",
-                (brand_name,)
-            )
-        except Exception as e:
-            pass  # Ignore duplicate errors
-
-    def get_brand_id(self, brand_name):
-        """Get brand ID from brands table"""
-        try:
-            self.cursor.execute("SELECT id FROM brands WHERE brand_name = %s", (brand_name,))
-            result = self.cursor.fetchone()
-            return result[0] if result else None
-        except Exception:
-            return None
-
-    def save_collection(self, collection_name):
-        """Save collection to collections table"""
-        try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO collections (collection_name) VALUES (%s)",
-                (collection_name,)
-            )
-        except Exception as e:
-            pass  # Ignore duplicate errors
-
-    def get_collection_id(self, collection_name):
-        """Get collection ID from collections table"""
-        try:
-            self.cursor.execute("SELECT id FROM collections WHERE collection_name = %s", (collection_name,))
-            result = self.cursor.fetchone()
-            return result[0] if result else None
-        except Exception:
-            return None
-
-    def save_deal_filters(self, dealid, store_id, brand_id, collection_id, 
-                         offer_type, condition_type, events, offer_status, include_expired,
-                         category_id=None, start_date=None, max_price=None, popularity_rank=None):
-        """Save filter variables to deal_filters table"""
-        try:
-            # Convert boolean to int for MySQL
-            include_expired_int = 1 if include_expired else 0
-            
-            self.cursor.execute("""
-                INSERT INTO deal_filters (
-                    dealid, start_date, max_price, category_id, store_id, brand_id, collection_id,
-                    offer_type, popularity_rank, condition_type, events, offer_status, include_expired
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE 
-                    start_date = VALUES(start_date),
-                    max_price = VALUES(max_price),
-                    category_id = VALUES(category_id),
-                    store_id = VALUES(store_id),
-                    brand_id = VALUES(brand_id),
-                    collection_id = VALUES(collection_id),
-                    offer_type = VALUES(offer_type),
-                    popularity_rank = VALUES(popularity_rank),
-                    condition_type = VALUES(condition_type),
-                    events = VALUES(events),
-                    offer_status = VALUES(offer_status),
-                    include_expired = VALUES(include_expired)
-            """, (
-                dealid, start_date, max_price, category_id, store_id, brand_id, collection_id,
-                offer_type, popularity_rank, condition_type, events, offer_status, include_expired_int
-            ))
-        except Exception as e:
-            print(f"Error saving deal_filters: {e}")  # Debug output
-            pass  # Ignore errors
-
-    def save_related_deal(self, dealid, related_url):
-        """Save related deal to related_deals table"""
-        try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO related_deals (dealid, related_url) VALUES (%s, %s)",
-                (dealid, related_url)
-            )
-        except Exception as e:
-            pass  # Ignore duplicate errors
-
     def process_image_item(self, item, spider):
-        """Process image item"""
-        try:
-            dealid = item.get('dealid', '')
-            imageurl = item.get('imageurl', '')
-            
-            if dealid and imageurl:
-                self.cursor.execute(
-                    "INSERT IGNORE INTO deal_images (dealid, imageurl) VALUES (%s, %s)",
-                    (dealid, imageurl)
-                )
-                self.images_saved += 1
-        except Exception as e:
-            spider.logger.error(f"❌ Error saving image: {e}")
-            
+        """Process deal image item"""
+        dealid = item.get('dealid', '')
+        imageurl = item.get('imageurl', '').strip()
+        
+        if dealid and imageurl:
+            self.save_image(dealid, imageurl, spider)
+        
         return item
 
     def process_category_item(self, item, spider):
-        """Process category item"""
-        return item  # Categories are handled in process_deal_item
+        """Process deal category item"""
+        dealid = item.get('dealid', '')
+        if dealid:
+            cat_data = {
+                'category_name': item.get('category_name', ''),
+                'category_url': item.get('category_url', ''),
+                'category_title': item.get('category_title', ''),
+                'category_id': item.get('category_id', '')
+            }
+            self.save_category(dealid, cat_data, spider)
+        
+        return item
 
     def process_related_deal_item(self, item, spider):
         """Process related deal item"""
-        return item  # Related deals are handled in process_deal_item
-    
-    def close_spider(self, spider):
-        """Close spider and run second pass to populate missing normalized data"""
-        if self.mysql_enabled:
-            try:
-                # Run second pass to populate missing normalized data
-                self.populate_missing_normalized_data(spider)
-                
-                spider.logger.info(f"✅ Final Statistics:")
-                spider.logger.info(f"   Deals saved: {self.deals_saved}")
-                spider.logger.info(f"   Related deals saved: {self.related_deals_saved}")
-                spider.logger.info(f"   Images saved: {self.images_saved}")
-                spider.logger.info(f"   Categories saved: {self.categories_saved}")
-                
-                self.cursor.close()
-                self.conn.close()
-                spider.logger.info("✅ MySQL connection closed")
-            except Exception as e:
-                spider.logger.error(f"❌ Error closing MySQL connection: {e}")
-    
-    def populate_missing_normalized_data(self, spider):
-        """Second pass to populate missing normalized data from existing deals"""
+        dealid = item.get('dealid', '')
+        relatedurl = item.get('relatedurl', '').strip()
+        
+        if dealid and relatedurl:
+            self.save_related_deal(dealid, relatedurl, spider)
+        
+        return item
+
+    def save_image(self, dealid, imageurl, spider):
+        """Save image with unique constraint (handles duplicates)"""
         try:
-            spider.logger.info("🔄 Running second pass to populate normalized tables...")
-            
-            # Get all deals that need normalized data
-            self.cursor.execute("SELECT dealid, title, url, store FROM deals WHERE store IS NOT NULL AND store != ''")
-            deals = self.cursor.fetchall()
-            
-            stores_populated = 0
-            brands_populated = 0
-            categories_populated = 0
-            deal_categories_populated = 0
-            related_deals_populated = 0
-            collections_populated = 0
-            
-            for deal in deals:
-                dealid, title, url, store = deal
-                
-                # Populate stores table
-                if store and store != 'Unknown Store':
-                    self.save_store(store)
-                    stores_populated += 1
-                
-                # Extract and populate brand from title
-                brand = self.extract_brand_from_title(title)
-                if brand:
-                    self.save_brand(brand)
-                    brands_populated += 1
-                
-                # Extract and populate category from URL
-                category = self.extract_category_from_url(url)
-                if category:
-                    self.save_category(category, url, category)
-                    categories_populated += 1
-                    
-                    # Link deal to category by id
-                    category_id = self.get_category_id(category)
-                    if category_id:
-                        self.save_deal_category(dealid, category_id)
-                    deal_categories_populated += 1
-                
-                # Extract and populate collections
-                collection = self.extract_collection_from_url(url)
-                if collection:
-                    self.save_collection(collection, url)
-                    collections_populated += 1
-                
-                # Extract related deals from deal text
-                related_deals = self.extract_related_deals_from_text(title + " " + (store or ""))
-                for related_deal in related_deals:
-                    self.save_related_deal(dealid, related_deal)
-                    related_deals_populated += 1
-            
-            spider.logger.info(f"✅ Second pass completed:")
-            spider.logger.info(f"   Stores populated: {stores_populated}")
-            spider.logger.info(f"   Brands populated: {brands_populated}")
-            spider.logger.info(f"   Categories populated: {categories_populated}")
-            spider.logger.info(f"   Deal-Category links: {deal_categories_populated}")
-            spider.logger.info(f"   Related deals: {related_deals_populated}")
-            spider.logger.info(f"   Collections: {collections_populated}")
-            
-        except Exception as e:
-            spider.logger.error(f"❌ Error in second pass: {e}")
-    
-    def extract_brand_from_title(self, title):
-        """Extract brand from deal title"""
-        if not title:
-            return None
-        
-        # Common brand patterns
-        brand_patterns = [
-            'Apple', 'Samsung', 'Nike', 'Adidas', 'Sony', 'Microsoft', 'Google', 
-            'Amazon', 'Walmart', 'Target', 'Best Buy', 'HP', 'Dell', 'Lenovo',
-            'Canon', 'Nikon', 'Bose', 'JBL', 'LG', 'Panasonic', 'Philips',
-            'Intel', 'AMD', 'NVIDIA', 'ASUS', 'Acer', 'MSI', 'Razer',
-            'Corsair', 'Logitech', 'SteelSeries', 'HyperX', 'Kingston',
-            'Western Digital', 'Seagate', 'SanDisk', 'Crucial'
-        ]
-        
-        title_lower = title.lower()
-        for brand in brand_patterns:
-            if brand.lower() in title_lower:
-                return brand
-        
-        return None
-    
-    def extract_category_from_url(self, url):
-        """Extract category from deal URL"""
-        if not url:
-            return None
-        
-        # Extract category from URL patterns
-        if '/cat/' in url:
-            # Extract category from /cat/Category/Subcategory/ pattern
-            parts = url.split('/cat/')
-            if len(parts) > 1:
-                category_part = parts[1].split('/')[0]
-                # Convert to readable format
-                category = category_part.replace('-', ' ').replace('_', ' ').title()
-                return category
-        
-        return None
-    
-    def clear_all_data(self):
-        """Clear all existing data from all tables"""
+            image_sql = """
+            INSERT INTO deal_images (dealid, imageurl, created_at)
+            VALUES (%s, %s, NOW())
+            ON DUPLICATE KEY UPDATE created_at = created_at
+            """
+            self.cursor.execute(image_sql, (dealid, imageurl))
+            self.images_saved += 1
+        except mysql.connector.Error as err:
+            # Ignore duplicate key errors (expected)
+            if "Duplicate entry" not in str(err):
+                spider.logger.debug(f"Error saving image: {err}")
+
+    def save_category(self, dealid, cat_data, spider):
+        """Save category"""
         try:
-            # Clear all tables in correct order (respecting foreign key constraints)
-            tables_to_clear = [
-                'deal_filters',
-                'deal_categories', 
-                'related_deals',
-                'deal_images',
-                'deals',
-                'stores',
-                'categories',
-                'brands',
-                'collections'
-            ]
-            
-            for table in tables_to_clear:
-                self.cursor.execute(f"DELETE FROM {table}")
-                self.cursor.execute(f"ALTER TABLE {table} AUTO_INCREMENT = 1")
-            
-        except Exception as e:
-            pass  # Ignore errors during clearing
-    
-    def save_deal_category(self, dealid, category_id):
-        """Save deal-category relationship by category_id"""
+            category_sql = """
+            INSERT INTO deal_categories (dealid, category_id, category_name, category_url, category_title, created_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
+            """
+            self.cursor.execute(category_sql, (
+                dealid,
+                cat_data.get('category_id', '') or '',
+                cat_data.get('category_name', '') or '',
+                cat_data.get('category_url', '') or '',
+                cat_data.get('category_title', '') or ''
+            ))
+            self.categories_saved += 1
+        except mysql.connector.Error as err:
+            spider.logger.debug(f"Error saving category: {err}")
+
+    def save_related_deal(self, dealid, relatedurl, spider):
+        """Save related deal with unique constraint (handles duplicates)"""
         try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO deal_categories (dealid, category_id) VALUES (%s, %s)",
-                (dealid, category_id)
-            )
-        except Exception as e:
-            pass  # Ignore duplicate errors
-    
-    def save_collection(self, collection_name, collection_url=None):
-        """Save collection to collections table"""
-        try:
-            # Base schema uses only collection_name
-            self.cursor.execute(
-                "INSERT IGNORE INTO collections (collection_name) VALUES (%s)",
-                (collection_name,)
-            )
-        except Exception:
-            # Extended schema fallback
-        try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO collections (collection_name, collection_url) VALUES (%s, %s)",
-                    (collection_name, collection_url or '')
-            )
-            except Exception:
-                pass
-    
-    def save_related_deal(self, dealid, related_deal_text):
-        """Save related deal"""
-        try:
-            self.cursor.execute(
-                "INSERT IGNORE INTO related_deals (dealid, related_deal_text) VALUES (%s, %s)",
-                (dealid, related_deal_text)
-            )
-        except Exception as e:
-            pass  # Ignore duplicate errors
-    
-    def extract_collection_from_url(self, url):
-        """Extract collection from URL"""
-        if not url:
-            return None
-        
-        # Extract collection from URL patterns
-        if '/s' in url:
-            # Extract from /s123/Collection-Name/ pattern
-            parts = url.split('/s')
-            if len(parts) > 1:
-                collection_part = parts[1].split('/')[1] if len(parts[1].split('/')) > 1 else ''
-                return collection_part.replace('-', ' ').title()
-        
-        return None
-    
-    def extract_related_deals_from_text(self, text):
-        """Extract related deals from text"""
-        if not text:
-            return []
-        
-        # Simple keyword-based related deal extraction
-        related_keywords = [
-            'similar', 'related', 'also', 'compare', 'alternative', 'other',
-            'like this', 'see also', 'more deals', 'related deals'
-        ]
-        
-        related_deals = []
-        text_lower = text.lower()
-        
-        for keyword in related_keywords:
-            if keyword in text_lower:
-                # Extract surrounding text as related deal
-                start = text_lower.find(keyword)
-                if start != -1:
-                    related_text = text[max(0, start-50):start+100]
-                    if related_text.strip():
-                        related_deals.append(related_text.strip())
-        
-        return related_deals[:3]  # Limit to 3 related deals
+            related_sql = """
+            INSERT INTO related_deals (dealid, relatedurl, created_at)
+            VALUES (%s, %s, NOW())
+            ON DUPLICATE KEY UPDATE created_at = created_at
+            """
+            self.cursor.execute(related_sql, (dealid, relatedurl))
+            self.related_deals_saved += 1
+        except mysql.connector.Error as err:
+            # Ignore duplicate key errors (expected)
+            if "Duplicate entry" not in str(err):
+                spider.logger.debug(f"Error saving related deal: {err}")

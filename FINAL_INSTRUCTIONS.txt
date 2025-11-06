@@ -1,0 +1,44 @@
+==========================================
+DealNews Scraper - Final Instructions
+==========================================
+
+IMPORTANT: MySQL Connection Issue Detected
+-------------------------------------------
+Your .env file has MySQL password as "root" but connection is failing.
+Please update your .env file with the correct MySQL password.
+
+Steps to Run Scraper:
+---------------------
+
+1. Fix MySQL Password in .env:
+   nano .env
+   # Change MYSQL_PASSWORD=root to your actual MySQL password
+   # Save and exit (Ctrl+X, then Y, then Enter)
+
+2. Initialize Database:
+   python3 init_database.py
+
+3. Run Scraper (Choose one):
+   
+   Option A - Simple Run:
+   python3 run_scraper.py
+   
+   Option B - Automated Script:
+   ./RUN_SCRAPER_NOW.sh
+   
+   Option C - Background Run:
+   nohup python3 run_scraper.py > logs/scraper_run.log 2>&1 &
+
+4. Check Progress (in another terminal):
+   python3 verify_mysql.py
+   # or
+   ./check_progress.sh
+
+5. Monitor Logs:
+   tail -f logs/scraper_run.log
+
+Expected Time: 2-4 hours for 100,000+ deals
+
+To Stop: Press Ctrl+C (or kill the process if running in background)
+
+==========================================

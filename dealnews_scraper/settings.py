@@ -10,22 +10,22 @@ ROBOTSTXT_OBEY = False
 # Fix Scrapy deprecation warning
 REQUEST_FINGERPRINTER_IMPLEMENTATION = '2.7'
 
-# ULTRA-CONSERVATIVE settings for maximum reliability
-DOWNLOAD_DELAY = 2.0  # Higher delay to avoid blocking
-AUTOTHROTTLE_ENABLED = True  # Enable auto-throttling for reliability
-AUTOTHROTTLE_START_DELAY = 3  # Start with 3 second delay
-AUTOTHROTTLE_MAX_DELAY = 10  # Max 10 second delay
-AUTOTHROTTLE_TARGET_CONCURRENCY = 2.0  # Very conservative concurrency
-# Randomize delay between requests
+# OPTIMIZED settings for ULTRA-FAST extraction (15-20 minutes)
+import os
+DOWNLOAD_DELAY = float(os.getenv('DOWNLOAD_DELAY', '0.1'))  # Minimal delay for speed
+AUTOTHROTTLE_ENABLED = os.getenv('AUTOTHROTTLE_ENABLED', 'true').lower() == 'true'
+AUTOTHROTTLE_START_DELAY = float(os.getenv('AUTOTHROTTLE_START_DELAY', '0.5'))
+AUTOTHROTTLE_MAX_DELAY = float(os.getenv('AUTOTHROTTLE_MAX_DELAY', '3'))
+AUTOTHROTTLE_TARGET_CONCURRENCY = float(os.getenv('AUTOTHROTTLE_TARGET_CONCURRENCY', '20.0'))  # Optimized concurrency
 RANDOMIZE_DOWNLOAD_DELAY = True  # Enable randomization to avoid detection
 
-# Ultra-conservative controls for maximum reliability
+# Optimized controls for maximum speed with reliability (100k+ deals in hours)
 RETRY_ENABLED = True  # Enable retries for reliability
-RETRY_TIMES = 3  # Reduced retries to avoid hammering
-DOWNLOAD_TIMEOUT = 60  # Higher timeout for reliability
-CONCURRENT_REQUESTS = 4  # Very conservative concurrent requests
-CONCURRENT_REQUESTS_PER_DOMAIN = 2  # Very conservative domain concurrency
-REACTOR_THREADPOOL_SIZE = 10  # Increase thread pool for better connection handling
+RETRY_TIMES = int(os.getenv('RETRY_TIMES', '3'))
+DOWNLOAD_TIMEOUT = int(os.getenv('DOWNLOAD_TIMEOUT', '20'))  # Balanced timeout
+CONCURRENT_REQUESTS = int(os.getenv('CONCURRENT_REQUESTS', '64'))  # High concurrency for speed
+CONCURRENT_REQUESTS_PER_DOMAIN = int(os.getenv('CONCURRENT_REQUESTS_PER_DOMAIN', '32'))  # High per domain
+REACTOR_THREADPOOL_SIZE = 32  # Optimized thread pool
 
 DOWNLOADER_MIDDLEWARES = {
     # Enable improved custom middleware
@@ -85,17 +85,20 @@ ITEM_PIPELINES = {
 
 FEED_EXPORT_ENCODING = 'utf-8'
 
-# Export settings for JSON and CSV
-FEEDS = {
-    'exports/deals.json': {
-        'format': 'json',
-        'encoding': 'utf8',
-        'store_empty': False,
-        'indent': 2,
-    },
-    'exports/deals.csv': {
-        'format': 'csv',
-        'encoding': 'utf8',
-        'store_empty': False,
+# Disable exports when MySQL pipeline is enabled to maximize speed
+if os.getenv('DISABLE_MYSQL', 'false').lower() in ('1', 'true', 'yes'):
+    FEEDS = {
+        'exports/deals.json': {
+            'format': 'json',
+            'encoding': 'utf8',
+            'store_empty': False,
+            'indent': 2,
+        },
+        'exports/deals.csv': {
+            'format': 'csv',
+            'encoding': 'utf8',
+            'store_empty': False,
+        }
     }
-}
+else:
+    FEEDS = {}

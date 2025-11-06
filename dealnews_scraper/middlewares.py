@@ -162,4 +162,10 @@ class ProxyMiddleware:
         prior_proxy = request.meta.get('proxy')
         if force_rotate or prior_proxy != proxy:
             request.meta['proxy'] = proxy
-            spider.logger.info(f"Using proxy {proxy}")
+            try:
+                # Avoid leaking credentials in logs
+                parsed = urlparse(proxy)
+                host_port = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
+                spider.logger.info(f"Using proxy {host_port}")
+            except Exception:
+                spider.logger.info("Using proxy (masked)")

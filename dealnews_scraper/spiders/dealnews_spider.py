@@ -14,257 +14,23 @@ class DealnewsSpider(scrapy.Spider):
         super().__init__()
         self.deals_extracted = 0
         self.start_time = time.time()
-        self.max_deals = 1000000  # Maximum limit - 1,000,000+ deals for complete data extraction
+        self.max_deals = 100000  # Target: 100,000+ deals
     
-    # COMPREHENSIVE URLs FOR MAXIMUM DATA EXTRACTION - 200,000+ DEALS
+    # Optimized start URLs - pagination will automatically handle 100k+ deals
     start_urls = [
-        # Main pages - verified working
         "https://www.dealnews.com/",
-        "https://www.dealnews.com/online-stores/",
-        
-        # Add more comprehensive URLs for 200,000+ deals
-        "https://www.dealnews.com/?e=1",  # All deals with filters
+        "https://www.dealnews.com/?e=1",  # All deals
         "https://www.dealnews.com/?pf=1",  # Staff picks
-        "https://www.dealnews.com/?start=0",  # Start from beginning
-        "https://www.dealnews.com/?start=20",  # Next page
-        "https://www.dealnews.com/?start=40",  # More pages
-        "https://www.dealnews.com/?start=60",  # Even more pages
-        "https://www.dealnews.com/?start=80",  # Continue pagination
-        "https://www.dealnews.com/?start=100",  # Deep pagination
-        "https://www.dealnews.com/?start=120",  # More deep pagination
-        "https://www.dealnews.com/?start=140",  # Even more
-        "https://www.dealnews.com/?start=160",  # Continue
-        "https://www.dealnews.com/?start=180",  # More
-        "https://www.dealnews.com/?start=200",  # Deep
-        "https://www.dealnews.com/?start=220",  # Deeper
-        "https://www.dealnews.com/?start=240",  # Even deeper
-        "https://www.dealnews.com/?start=260",  # Much deeper
-        "https://www.dealnews.com/?start=280",  # Very deep
-        "https://www.dealnews.com/?start=300",  # Extremely deep
-        "https://www.dealnews.com/?start=320",  # Maximum depth
-        "https://www.dealnews.com/?start=340",  # Beyond maximum
-        "https://www.dealnews.com/?start=360",  # Ultra deep
-        "https://www.dealnews.com/?start=380",  # Super deep
-        "https://www.dealnews.com/?start=400",  # Mega deep
-        "https://www.dealnews.com/?start=420",  # Giga deep
-        "https://www.dealnews.com/?start=440",  # Tera deep
-        "https://www.dealnews.com/?start=460",  # Peta deep
-        "https://www.dealnews.com/?start=480",  # Exa deep
-        "https://www.dealnews.com/?start=500",  # Zetta deep
-        "https://www.dealnews.com/?start=520",  # Yotta deep
-        "https://www.dealnews.com/?start=540",  # Bronto deep
-        "https://www.dealnews.com/?start=560",  # Geop deep
-        "https://www.dealnews.com/?start=580",  # Sagan deep
-        "https://www.dealnews.com/?start=600",  # Peta deep
-        "https://www.dealnews.com/?start=620",  # Exa deep
-        "https://www.dealnews.com/?start=640",  # Zetta deep
-        "https://www.dealnews.com/?start=660",  # Yotta deep
-        "https://www.dealnews.com/?start=680",  # Bronto deep
-        "https://www.dealnews.com/?start=700",  # Geop deep
-        "https://www.dealnews.com/?start=720",  # Sagan deep
-        "https://www.dealnews.com/?start=740",  # Peta deep
-        "https://www.dealnews.com/?start=760",  # Exa deep
-        "https://www.dealnews.com/?start=780",  # Zetta deep
-        "https://www.dealnews.com/?start=800",  # Yotta deep
-        "https://www.dealnews.com/?start=820",  # Bronto deep
-        "https://www.dealnews.com/?start=840",  # Geop deep
-        "https://www.dealnews.com/?start=860",  # Sagan deep
-        "https://www.dealnews.com/?start=880",  # Peta deep
-        "https://www.dealnews.com/?start=900",  # Exa deep
-        "https://www.dealnews.com/?start=920",  # Zetta deep
-        "https://www.dealnews.com/?start=940",  # Yotta deep
-        "https://www.dealnews.com/?start=960",  # Bronto deep
-        "https://www.dealnews.com/?start=980",  # Geop deep
-        "https://www.dealnews.com/?start=1000",  # Sagan deep
-        
-        # Electronics - comprehensive coverage
+        "https://www.dealnews.com/online-stores/",
+        # Main category pages - pagination will crawl deep
         "https://www.dealnews.com/c142/Electronics/",
-        "https://www.dealnews.com/c147/Electronics/Audio-Components/Speakers/",
-        "https://www.dealnews.com/c148/Electronics/Audio-Components/Home-Theater-Systems/",
-        "https://www.dealnews.com/c155/Electronics/Audio-Components/Headphones/",
-        "https://www.dealnews.com/c159/Electronics/TVs/",
-        "https://www.dealnews.com/c168/Electronics/Cameras/Digital-Cameras/",
-        "https://www.dealnews.com/c171/Electronics/Phones-Cell-Phones/",
-        "https://www.dealnews.com/c452/Electronics/Streaming-Media-Players/",
-        "https://www.dealnews.com/c491/Electronics/Phones-Cell-Phones/Apple-iPhones/",
-        "https://www.dealnews.com/c672/Electronics/Phones-Cell-Phones/Android-Phones/",
-        
-        # Computers - comprehensive coverage
-        "https://www.dealnews.com/c49/Computers/Laptops/",
-        "https://www.dealnews.com/c50/Computers/Desktops/",
-        "https://www.dealnews.com/c51/Computers/Tablets/",
-        "https://www.dealnews.com/c52/Computers/Computer-Accessories/",
-        "https://www.dealnews.com/c53/Computers/Software/",
-        "https://www.dealnews.com/c54/Computers/Networking/",
-        
-        # Home & Garden - comprehensive coverage
-        "https://www.dealnews.com/c196/Home-Garden/",
-        "https://www.dealnews.com/c197/Home-Garden/Tools-Hardware/",
-        "https://www.dealnews.com/c200/Home-Garden/Decor/",
-        "https://www.dealnews.com/c304/Home-Garden/Appliances/",
-        "https://www.dealnews.com/c607/Home-Garden/Appliances/Household-Items/Air-Conditioners/",
-        
-        # Clothing & Accessories - comprehensive coverage
-        "https://www.dealnews.com/c202/Clothing-Accessories/",
-        "https://www.dealnews.com/c280/Clothing-Accessories/Shoes/",
-        "https://www.dealnews.com/c275/Clothing-Accessories/Accessories/",
-        "https://www.dealnews.com/c487/Clothing-Accessories/Activewear/",
-        "https://www.dealnews.com/c489/Clothing-Accessories/Coats/",
-        "https://www.dealnews.com/c721/Clothing-Accessories/T-Shirts/",
-        
-        # Gaming & Toys - comprehensive coverage
-        "https://www.dealnews.com/c189/Gaming-Toys/Computer-Games/PC-Games/",
-        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/",
-        "https://www.dealnews.com/c714/Gaming-Toys/Video-Games/Consoles/",
-        "https://www.dealnews.com/c192/Gaming-Toys/Toys/",
-        
-        # Sports & Fitness - comprehensive coverage
-        "https://www.dealnews.com/c298/Sports-Fitness/Camping-Outdoors/",
-        "https://www.dealnews.com/c299/Sports-Fitness/Exercise-Fitness/",
-        "https://www.dealnews.com/c300/Sports-Fitness/Outdoor-Gear/",
-        
-        # Health & Beauty - comprehensive coverage
-        "https://www.dealnews.com/c765/Health-Beauty/Health/",
-        "https://www.dealnews.com/c766/Health-Beauty/Beauty/",
-        "https://www.dealnews.com/c767/Health-Beauty/Personal-Care/",
-        
-        # Automotive - comprehensive coverage
-        "https://www.dealnews.com/c145/Automotive/Car-Audio/",
-        "https://www.dealnews.com/c146/Automotive/Car-Parts/",
-        "https://www.dealnews.com/c147/Automotive/Car-Accessories/",
-        
-        # Office & School Supplies - comprehensive coverage
-        "https://www.dealnews.com/c281/Office-School-Supplies/Supplies/",
-        "https://www.dealnews.com/c649/Office-School-Supplies/Office-Furniture/Office-Chairs/",
-        
-        # Movies, Music, Books - comprehensive coverage
-        "https://www.dealnews.com/c500/Movies-Music-Books/Movies-TV-Shows-Videos/",
-        "https://www.dealnews.com/c501/Movies-Music-Books/Music/",
-        "https://www.dealnews.com/c502/Movies-Music-Books/Books/",
-        
-        # Electronics - current working URLs
-        "https://www.dealnews.com/c142/Electronics/",
-        "https://www.dealnews.com/c147/Electronics/Audio-Components/Speakers/",
-        "https://www.dealnews.com/c148/Electronics/Audio-Components/Home-Theater-Systems/",
-        "https://www.dealnews.com/c155/Electronics/Audio-Components/Headphones/",
-        "https://www.dealnews.com/c159/Electronics/TVs/",
-        "https://www.dealnews.com/c159/Electronics/TVs/b1327/Vizio/",
-        "https://www.dealnews.com/c159/Electronics/TVs/b30622/TCL/",
-        "https://www.dealnews.com/c159/Electronics/TVs/f1409/4-K/",
-        "https://www.dealnews.com/c159/Electronics/TVs/f1667/Smart-TV/",
-        "https://www.dealnews.com/c168/Electronics/Cameras/Digital-Cameras/",
-        "https://www.dealnews.com/c171/Electronics/Phones-Cell-Phones/",
-        "https://www.dealnews.com/c189/Gaming-Toys/Computer-Games/PC-Games/",
-        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/",
-        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1158/Play-Station-4/",
-        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1546/Xbox-One/",
-        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1652/Nintendo-Switch/",
-        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1915/Play-Station-5/",
-        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/f1918/Xbox-Series-S-X/",
-        "https://www.dealnews.com/c299/Electronics/Camcorders/",
-        "https://www.dealnews.com/c306/Electronics/Batteries/",
-        "https://www.dealnews.com/c452/Electronics/Streaming-Media-Players/",
-        "https://www.dealnews.com/c491/Electronics/Phones-Cell-Phones/Apple-iPhones/",
-        "https://www.dealnews.com/c671/Electronics/Phones-Cell-Phones/Apple-iPhones/iPhone-Accessories/iPhone-Cases/",
-        "https://www.dealnews.com/c672/Electronics/Phones-Cell-Phones/Android-Phones/",
-        "https://www.dealnews.com/c673/Electronics/Phones-Cell-Phones/Android-Phones/Android-Phone-Accessories/",
-        "https://www.dealnews.com/c837/Electronics/Portable-Speakers/",
-        "https://www.dealnews.com/c914/Electronics/Wearable-Technology/Smart-Watches/",
-        "https://www.dealnews.com/c914/Electronics/Wearable-Technology/Smart-Watches/b13/Apple/",
-        "https://www.dealnews.com/c914/Electronics/Wearable-Technology/Smart-Watches/b28/Samsung/",
-        "https://www.dealnews.com/c917/Electronics/Wearable-Technology/Fitness-Trackers/b36121/Fitbit/",
-        
-        # Computers - verified working URLs
         "https://www.dealnews.com/c39/Computers/",
-        "https://www.dealnews.com/c39/Computers/t2/Coupons/",
-        "https://www.dealnews.com/c41/Computers/Apple-Computers/",
-        "https://www.dealnews.com/c48/Computers/Desktops/",
-        "https://www.dealnews.com/c49/Computers/Laptops/",
-        "https://www.dealnews.com/c49/Computers/Laptops/f15/Core-i5/",
-        "https://www.dealnews.com/c49/Computers/Laptops/f31/Gaming/",
-        "https://www.dealnews.com/c49/Computers/Laptops/s897/Costco/",
-        "https://www.dealnews.com/c56/Computers/Storage/Hard-Drives/",
-        "https://www.dealnews.com/c70/Computers/Peripherals/Input-Devices/",
-        "https://www.dealnews.com/c75/Computers/Peripherals/Monitors/",
-        "https://www.dealnews.com/c93/Computers/Upgrades-Components/",
-        "https://www.dealnews.com/c108/Computers/Storage/Flash-Memory-Cards/",
-        "https://www.dealnews.com/c124/Computers/Software/",
-        "https://www.dealnews.com/c297/Computers/Storage/USB-Flash-Drives/",
-        "https://www.dealnews.com/c572/Computers/iPad-Tablet/iPad-Accessories/",
-        "https://www.dealnews.com/c577/Computers/iPad-Tablet/iPad-Apps/",
-        "https://www.dealnews.com/c623/Computers/iPad-Tablet/Tablet-Accessories/",
-        "https://www.dealnews.com/c732/Computers/Networking/Wireless-Networking/Routers/",
-        
-        # Home & Garden - verified working URLs
         "https://www.dealnews.com/c196/Home-Garden/",
-        "https://www.dealnews.com/c196/Home-Garden/t2/Coupons/",
-        "https://www.dealnews.com/c199/Home-Garden/Home-Furniture/",
-        "https://www.dealnews.com/c200/Home-Garden/Decor/",
-        "https://www.dealnews.com/c213/Home-Garden/Food-Drink/",
-        "https://www.dealnews.com/c214/Home-Garden/Food-Drink/Groceries/",
-        "https://www.dealnews.com/c304/Home-Garden/Appliances/",
-        "https://www.dealnews.com/c360/Home-Garden/Bed-Bath/",
-        "https://www.dealnews.com/c377/Home-Garden/Food-Drink/Restaurants/",
-        "https://www.dealnews.com/c529/Home-Garden/Garden/BBQs-Grills/",
-        "https://www.dealnews.com/c607/Home-Garden/Appliances/Household-Items/Air-Conditioners/",
-        "https://www.dealnews.com/c642/Home-Garden/Kitchen/Small-Appliances/",
-        "https://www.dealnews.com/c645/Home-Garden/Tools-Hardware/Hand-Tools/",
-        "https://www.dealnews.com/c646/Home-Garden/Tools-Hardware/Power-Tools/",
-        "https://www.dealnews.com/c647/Home-Garden/Tools-Hardware/Tool-Storage-Organization/",
-        "https://www.dealnews.com/c648/Home-Garden/Tools-Hardware/Flashlights-Lighting/",
-        "https://www.dealnews.com/c661/Home-Garden/Babies-Kids-Items/Diapers-Wipes/",
-        "https://www.dealnews.com/c744/Home-Garden/Garden/Patio-Furniture/",
-        "https://www.dealnews.com/c747/Home-Garden/Garden/Garden-Tools/",
-        "https://www.dealnews.com/c810/Home-Garden/Light-Bulbs/",
-        
-        # Clothing & Accessories - verified working URLs
         "https://www.dealnews.com/c202/Clothing-Accessories/",
-        "https://www.dealnews.com/c202/Clothing-Accessories/f1/Mens/",
-        "https://www.dealnews.com/c202/Clothing-Accessories/f2/Womens/",
-        "https://www.dealnews.com/c202/Clothing-Accessories/f5/Girls/",
-        "https://www.dealnews.com/c202/Clothing-Accessories/t2/Coupons/",
-        "https://www.dealnews.com/c227/Clothing-Accessories/Jewelry/",
-        "https://www.dealnews.com/c280/Clothing-Accessories/Shoes/f1/Mens/f1107/Sandals/",
-        "https://www.dealnews.com/c280/Clothing-Accessories/Shoes/f2/Womens/",
-        "https://www.dealnews.com/c287/Clothing-Accessories/Luggage-Travel-Gear/",
-        "https://www.dealnews.com/c436/Clothing-Accessories/Accessories/Watches/",
-        "https://www.dealnews.com/c454/Clothing-Accessories/Accessories/Sunglasses/",
-        "https://www.dealnews.com/c454/Clothing-Accessories/Accessories/Sunglasses/f1/Mens/",
-        "https://www.dealnews.com/c481/Clothing-Accessories/Accessories/Handbags/",
-        "https://www.dealnews.com/c487/Clothing-Accessories/Activewear/",
-        "https://www.dealnews.com/c487/Clothing-Accessories/Activewear/f2/Womens/",
-        "https://www.dealnews.com/c488/Clothing-Accessories/Intimates/f2/Womens/",
-        "https://www.dealnews.com/c489/Clothing-Accessories/Coats/",
-        "https://www.dealnews.com/c489/Clothing-Accessories/Coats/f1/Mens/",
-        "https://www.dealnews.com/c490/Clothing-Accessories/Dresses/f2/Womens/",
-        "https://www.dealnews.com/c515/Clothing-Accessories/Jeans/",
-        "https://www.dealnews.com/c716/Clothing-Accessories/Shirts/f1/Mens/",
-        "https://www.dealnews.com/c716/Clothing-Accessories/Shirts/f2/Womens/",
-        "https://www.dealnews.com/c717/Clothing-Accessories/Shorts/f1/Mens/",
-        "https://www.dealnews.com/c717/Clothing-Accessories/Shorts/f2/Womens/",
-        "https://www.dealnews.com/c721/Clothing-Accessories/T-Shirts/f1/Mens/",
-        "https://www.dealnews.com/c851/Clothing-Accessories/Luggage-Travel-Gear/Backpacks/",
-        "https://www.dealnews.com/c866/Clothing-Accessories/Sweatshirts-Hoodies/",
-        
-        # Travel & Entertainment - verified working URLs
+        "https://www.dealnews.com/c191/Gaming-Toys/Video-Games/",
+        "https://www.dealnews.com/c298/Sports-Fitness/",
+        "https://www.dealnews.com/c765/Health-Beauty/",
         "https://www.dealnews.com/c206/Travel-Entertainment/",
-        "https://www.dealnews.com/c206/Travel-Entertainment/f1069/Caribbean/",
-        "https://www.dealnews.com/c206/Travel-Entertainment/s857/Sams-Club/",
-        "https://www.dealnews.com/c207/Travel-Entertainment/Airfare/",
-        "https://www.dealnews.com/c629/Travel-Entertainment/Cruises/",
-        
-        # Health & Beauty - verified working URLs
-        "https://www.dealnews.com/c798/Health-Beauty/Health/Supplements/",
-        
-        # Financial Services - verified working URLs
-        "https://www.dealnews.com/c522/Financial-Services/Credit-Cards/",
-        
-        # Popular stores - verified working URLs
-        "https://www.dealnews.com/s313/Amazon/",
-        "https://www.dealnews.com/s1186/Nike/",
-        "https://www.dealnews.com/s1669/Verizon-Fios/",
-        "https://www.dealnews.com/s1764/Verizon/",
-        "https://www.dealnews.com/s42512/lululemon/",
     ]
 
     def start_requests(self):
@@ -293,56 +59,81 @@ class DealnewsSpider(scrapy.Spider):
         
         self.logger.info(f"Parsing: {response.url}")
         
-        # IMPROVED DEAL EXTRACTION - Multiple selectors for maximum coverage
+        # IMPROVED DEAL EXTRACTION - Try multiple strategies
         deals = []
         
-        # Try multiple deal selectors to find ONLY REAL DEALS (not navigation)
-        deal_selectors = [
-            # DealNews specific selectors - UPDATED for current site
-            '[data-deal-id]',  # Real deals have data-deal-id
-            '[data-rec-id]',   # Real deals have data-rec-id
-            '.deal-item',      # Main deal container
-            '.deal-card', 
-            '.deal-tile',
-            '.deal-container',
-            '.deal-wrapper',
-            '.deal-box',
-            '.deal-content',
-            '.deal-listing',
-            '.deal-post',
-            '.deal-entry',
-            # More specific selectors for actual deals
-            '.deal-item-wrapper',
-            '.deal-item-container',
-            '.deal-block',
-            '.deal-grid-item',
-            '.deal-list-item',
-            # Look within main content areas (avoid navigation)
-            'main [data-deal-id]',
-            'main [data-rec-id]',
-            'main .deal-item',
-            '.main-content [data-deal-id]',
-            '.main-content .deal-item',
-            # Article-based selectors for deals
-            'article[class*="deal"]:not([class*="nav"]):not([class*="menu"])',
-            'div[class*="deal"]:not([class*="nav"]):not([class*="menu"])'
+        # Strategy 1: Look for deal links (most reliable)
+        deal_links = response.css('a[href*="/deals/"], a[href*="/deal/"], a[href*="/d/"]')
+        for link in deal_links:
+            # Get parent container
+            parent = link.xpath('./ancestor::*[contains(@class, "deal") or contains(@class, "item") or contains(@class, "card")][1]')
+            if parent:
+                deals.extend(parent)
+            else:
+                # Use the link itself as deal container
+                deals.append(link.xpath('./..'))
+        
+        # Strategy 2: Data attributes
+        data_deals = response.css('[data-deal-id], [data-rec-id], [data-deal], [data-id*="deal"]')
+        deals.extend(data_deals)
+        
+        # Strategy 3: Common deal container classes
+        container_selectors = [
+            'article.deal', 'article[class*="deal"]',
+            'div.deal-item', 'div[class*="deal-item"]',
+            'div.deal-card', 'div[class*="deal-card"]',
+            'div.deal-tile', 'div[class*="deal-tile"]',
+            'div[class*="deal-container"]',
+            'div[class*="deal-wrapper"]',
+            'div[class*="deal-box"]',
+            'div[class*="deal-content"]',
+            'div[class*="deal-listing"]',
+            'div[class*="deal-post"]',
+            'div[class*="deal-entry"]',
+            '.item[class*="deal"]',
+            '.card[class*="deal"]',
+            '.tile[class*="deal"]',
         ]
         
-        for selector in deal_selectors:
-            found_deals = response.css(selector)
-            if found_deals:
-                self.logger.info(f"Found {len(found_deals)} deals with selector: {selector}")
-                deals.extend(found_deals)
-            else:
-                self.logger.debug(f"No deals found with selector: {selector}")
+        for selector in container_selectors:
+            found = response.css(selector)
+            if found:
+                deals.extend(found)
         
-        # Remove duplicates while preserving order
+        # Strategy 4: Look for product/offer containers
+        product_containers = response.css('[class*="product"], [class*="offer"], [class*="listing"]')
+        for container in product_containers:
+            # Check if it has deal-like content
+            text = container.get()
+            if text and ('deal' in text.lower() or '$' in text or 'off' in text.lower() or 'sale' in text.lower()):
+                deals.append(container)
+        
+        # Strategy 5: Extract from JSON-LD structured data first (fastest)
+        json_deals = response.css('script[type="application/ld+json"]::text').getall()
+        if json_deals:
+            import json
+            for json_str in json_deals:
+                try:
+                    data = json.loads(json_str)
+                    if isinstance(data, dict) and data.get('@type') in ['Offer', 'Product', 'ItemList']:
+                        # Create a virtual deal container for JSON data
+                        deals.append(response.css('body').xpath('./script[contains(text(), "@type")][1]'))
+                except:
+                    pass
+        
+        # Remove duplicates
         seen = set()
         unique_deals = []
         for deal in deals:
-            deal_html = deal.get()
-            if deal_html not in seen:
-                seen.add(deal_html)
+            if deal:
+                deal_html = deal.get() or ''
+                deal_id = deal.css('::attr(data-deal-id)').get() or deal.css('::attr(data-rec-id)').get() or ''
+                deal_url = deal.css('a::attr(href)').get() or ''
+                
+                # Create unique identifier
+                unique_id = deal_id or deal_url or hash(deal_html[:200])
+                if unique_id not in seen:
+                    seen.add(unique_id)
                 unique_deals.append(deal)
         
         self.logger.info(f"Total unique deals found on {response.url}: {len(unique_deals)}")
@@ -359,7 +150,7 @@ class DealnewsSpider(scrapy.Spider):
                 
                 # Extract related data
                 yield from self.extract_deal_images(deal, item)
-                yield from self.extract_deal_categories(deal, item)
+                yield from self.extract_deal_categories(deal, item, response)
                 yield from self.extract_related_deals(deal, item)
         
         # Handle pagination
@@ -407,7 +198,7 @@ class DealnewsSpider(scrapy.Spider):
                 
                 # Extract related data
                 yield from self.extract_deal_images_from_json(deal_data, item)
-                yield from self.extract_deal_categories_from_json(deal_data, item)
+                yield from self.extract_deal_categories_from_json(deal_data, item, response)
                 yield from self.extract_related_deals_from_json(deal_data, item)
 
     def extract_deal_from_json(self, deal_data, response):
@@ -417,11 +208,16 @@ class DealnewsSpider(scrapy.Spider):
             item = DealnewsItem()
             
             # Extract basic information from JSON-LD
-            item['dealid'] = deal_data.get('id', f"json_deal_{hash(str(deal_data))}")
+            json_url = deal_data.get('url', response.url)
+            # Prefer stable id derived from absolute deal URL to maximize uniqueness
+            if json_url:
+                item['dealid'] = f"deal_{hash(json_url)}"
+            else:
+                item['dealid'] = deal_data.get('id', f"json_deal_{hash(str(deal_data))}")
             item['title'] = deal_data.get('name', '')
             item['detail'] = deal_data.get('description', '')  # Use 'detail' instead of 'description'
             item['price'] = deal_data.get('price', '')
-            item['url'] = deal_data.get('url', response.url)
+            item['url'] = json_url
             
             # Extract category information
             category = deal_data.get('category', {})
@@ -553,14 +349,30 @@ class DealnewsSpider(scrapy.Spider):
         except Exception as e:
             self.logger.error(f"Error extracting images from JSON: {e}")
 
-    def extract_deal_categories_from_json(self, deal_data, item):
+    def extract_deal_categories_from_json(self, deal_data, item, response):
         """Extract deal categories from JSON-LD data"""
         try:
             category = deal_data.get('category', {})
-            if isinstance(category, dict) and category.get('name'):
-                category_item = DealCategoryItem()
-                category_item['dealid'] = item['dealid']
-                category_item['category_name'] = category['name']
+            if isinstance(category, dict):
+                if category.get('name'):
+                    category_item = DealCategoryItem()
+                    category_item['dealid'] = item['dealid']
+                    category_item['category_name'] = category['name']
+                    if category.get('url'):
+                        category_item['category_url'] = category['url']
+                    if category.get('@id'):
+                        category_item['category_id'] = category['@id']
+                    yield category_item
+            elif isinstance(category, list):
+                for cat in category:
+                    if isinstance(cat, dict) and cat.get('name'):
+                        category_item = DealCategoryItem()
+                        category_item['dealid'] = item['dealid']
+                        category_item['category_name'] = cat['name']
+                        if cat.get('url'):
+                            category_item['category_url'] = cat['url']
+                        if cat.get('@id'):
+                            category_item['category_id'] = cat['@id']
                 yield category_item
         except Exception as e:
             self.logger.error(f"Error extracting categories from JSON: {e}")
@@ -735,14 +547,12 @@ class DealnewsSpider(scrapy.Spider):
             else:
                 item['store'] = ''
             
-            # IMPROVED Category extraction
+            # Extract category from deal element
             category_selectors = [
-                # DealNews specific
                 '.category::text',
                 '.deal-category::text',
                 '.breadcrumb::text',
                 '.deal-breadcrumb::text',
-                # Generic
                 '.category-name::text',
                 '.cat::text',
                 '.section::text',
@@ -760,9 +570,37 @@ class DealnewsSpider(scrapy.Spider):
                 category_value = url_category
             item['category'] = category_value
 
-            # Ensure categories list exists for pipeline normalization
-            if item['category']:
-                item['categories'] = [item['category']]
+            # Extract categories from page-level breadcrumbs and tags
+            page_categories = []
+            # Extract from page breadcrumbs
+            page_breadcrumbs = response.css('.breadcrumb a, .breadcrumbs a, [class*="breadcrumb"] a')
+            for breadcrumb in page_breadcrumbs:
+                cat_name = breadcrumb.css('::text').get()
+                cat_url = breadcrumb.css('::attr(href)').get()
+                if cat_name and cat_name.strip():
+                    page_categories.append({
+                        'category_name': cat_name.strip(),
+                        'category_url': response.urljoin(cat_url) if cat_url else '',
+                        'category_id': re.search(r'/c(\d+)/', cat_url).group(1) if cat_url and re.search(r'/c(\d+)/', cat_url) else ''
+                    })
+            
+            # Extract from page tags/filters
+            page_tags = response.css('.tag a, .filter a, [class*="tag"] a, [class*="filter"] a')
+            for tag in page_tags:
+                tag_name = tag.css('::text').get()
+                tag_url = tag.css('::attr(href)').get()
+                if tag_name and tag_name.strip():
+                    page_categories.append({
+                        'category_name': tag_name.strip(),
+                        'category_title': tag_name.strip(),
+                        'category_url': response.urljoin(tag_url) if tag_url else ''
+                    })
+            
+            # Store categories for pipeline
+            if page_categories:
+                item['categories'] = page_categories
+            elif item['category']:
+                item['categories'] = [{'category_name': item['category']}]
             else:
                 item['categories'] = []
             
@@ -844,12 +682,46 @@ class DealnewsSpider(scrapy.Spider):
                 image_item['imageurl'] = img_url
                 yield image_item
 
-    def extract_deal_categories(self, deal, item):
-        """Extract deal categories"""
-        categories = deal.css('.category::text, .tag::text, .label::text, .breadcrumb::text').getall()
-        for category in categories:
-            text = category.strip()
-            if text:
+    def extract_deal_categories(self, deal, item, response):
+        """Extract deal categories from breadcrumbs, tags, and links"""
+        # Extract from breadcrumbs (e.g., "All Deals > Automotive > Amazon")
+        breadcrumbs = deal.css('.breadcrumb a, .breadcrumbs a, [class*="breadcrumb"] a')
+        for breadcrumb in breadcrumbs:
+            category_name = breadcrumb.css('::text').get()
+            category_url = breadcrumb.css('::attr(href)').get()
+            if category_name and category_name.strip():
+                category_item = DealCategoryItem()
+                category_item['dealid'] = item['dealid']
+                category_item['category_name'] = category_name.strip()
+                if category_url:
+                    category_url = response.urljoin(category_url)
+                    category_item['category_url'] = category_url
+                    # Extract category ID from URL if present (e.g., /c142/Electronics/)
+                    match = re.search(r'/c(\d+)/', category_url)
+                    if match:
+                        category_item['category_id'] = match.group(1)
+                yield category_item
+        
+        # Extract from tags/filters (e.g., "Amazon Prime Day", "Staff Pick", "Popularity: 5/5")
+        tags = deal.css('.tag a, .filter a, [class*="tag"] a, [class*="filter"] a, .label a')
+        for tag in tags:
+            tag_name = tag.css('::text').get()
+            tag_url = tag.css('::attr(href)').get()
+            if tag_name and tag_name.strip():
+                category_item = DealCategoryItem()
+                category_item['dealid'] = item['dealid']
+                category_item['category_name'] = tag_name.strip()
+                category_item['category_title'] = tag_name.strip()
+                if tag_url:
+                    tag_url = response.urljoin(tag_url)
+                    category_item['category_url'] = tag_url
+                yield category_item
+        
+        # Also extract from text-based categories/tags
+        category_texts = deal.css('.category::text, .tag::text, .label::text').getall()
+        for text in category_texts:
+            text = text.strip()
+            if text and len(text) > 1:
                 category_item = DealCategoryItem()
                 category_item['dealid'] = item['dealid']
                 category_item['category_name'] = text
@@ -866,31 +738,56 @@ class DealnewsSpider(scrapy.Spider):
                 yield related_item
 
     def handle_pagination(self, response):
-        """Handle pagination and infinite scroll for DealNews"""
+        """Handle pagination and infinite scroll for DealNews - OPTIMIZED for 100k+ deals"""
+        if self.deals_extracted >= self.max_deals:
+            return
+        
         self.logger.info(f"Handling pagination for: {response.url}")
         
-        # Look for DealNews-specific pagination patterns - updated for 2025
-        ajax_pagination_patterns = [
-            'a[href*="?start="]',  # DealNews current pattern
-            'a[href*="&start="]',  # DealNews current pattern
-            '.pagination a[href*="start="]',
-            '.pager a[href*="start="]',
-            '.page-numbers a[href*="start="]',
-            # More specific patterns
-            'a[href*="start="][href*="e=1"]',  # With category filter
-            'a[href*="start="][href*="pf=1"]',  # With staff pick filter
+        # Extract current start parameter
+        current_start = 0
+        if 'start=' in response.url:
+            match = re.search(r'start=(\d+)', response.url)
+            if match:
+                current_start = int(match.group(1))
+        
+        # Generate pagination URLs dynamically (faster than parsing HTML)
+        max_pages_to_follow = min(5000, (self.max_deals - self.deals_extracted) // 20)  # Assume 20 deals per page
+        
+        for i in range(1, max_pages_to_follow + 1):
+            if self.deals_extracted >= self.max_deals:
+                break
+                
+            next_start = current_start + (i * 20)
+            
+            # Build next page URL
+            if '?' in response.url:
+                if 'start=' in response.url:
+                    next_url = re.sub(r'start=\d+', f'start={next_start}', response.url)
+                else:
+                    next_url = f"{response.url}&start={next_start}"
+            else:
+                next_url = f"{response.url}?start={next_start}"
+            
+            if self.is_valid_dealnews_url(next_url):
+                yield response.follow(next_url, self.parse, errback=self.errback_http, dont_filter=False)
+        
+        # Also look for pagination links in HTML
+        pagination_patterns = [
+            'a[href*="?start="]',
+            'a[href*="&start="]',
+            '.pagination a::attr(href)',
+            '.pager a::attr(href)',
+            '.page-numbers a::attr(href)',
+            'a[class*="next"]::attr(href)',
+            'a[class*="page"]::attr(href)',
         ]
         
-        pagination_found = 0
-        for pattern in ajax_pagination_patterns:
-            pagination_links = response.css(pattern + '::attr(href)').getall()
-            for link in pagination_links[:500]:  # Increased to 500 pagination links for 200,000+ deals
-                if link and self.is_valid_dealnews_url(link):
-                    # Avoid old pagination patterns that cause 404s
-                    if 'start=' in link and not any(x in link for x in ['page=', 'offset=', 'p=']):
-                        self.logger.info(f"Found pagination link: {link}")
-                        yield response.follow(link, self.parse, errback=self.errback_http)
-                        pagination_found += 1
+        for pattern in pagination_patterns:
+            links = response.css(pattern).getall()
+            for link in links[:50]:  # Limit to avoid too many requests
+                if link and 'start=' in link and self.is_valid_dealnews_url(link):
+                    yield response.follow(link, self.parse, errback=self.errback_http, dont_filter=False)
         
         # Look for "Load More" or "Show More" buttons - avoid generic selectors
         load_more_selectors = [
@@ -905,7 +802,7 @@ class DealnewsSpider(scrapy.Spider):
         load_more_found = 0
         for selector in load_more_selectors:
             load_more_buttons = response.css(selector)
-            for button in load_more_buttons[:300]:  # Increased to 300 load more buttons for 200,000+ deals
+            for button in load_more_buttons[:50]:  # Limit load more buttons
                 data_url = button.css('::attr(data-url)').get() or button.css('::attr(href)').get()
                 if data_url and 'start=' in data_url:
                     self.logger.info(f"Found load more button: {data_url}")
@@ -915,7 +812,7 @@ class DealnewsSpider(scrapy.Spider):
         # Also look for traditional pagination links - but only with start= pattern
         pagination_links = response.css('.pagination a[href*="start="]::attr(href), .pager a[href*="start="]::attr(href)').getall()
         valid_pagination_links = 0
-        for link in pagination_links[:400]:  # Increased to 400 pagination links for 200,000+ deals
+        for link in pagination_links[:50]:  # Limit pagination links
             if link and 'start=' in link and not any(x in link for x in ['page=', 'offset=', 'p=']):
                 self.logger.info(f"Found pagination link: {link}")
                 yield response.follow(link, self.parse, errback=self.errback_http)

@@ -36,24 +36,30 @@ services:
     build: .
     container_name: dealnews_scraper
     restart: "no"
+    env_file:
+      - ./.env
     environment:
-      - MYSQL_HOST=mysql
-      - MYSQL_PORT=3306
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=root
-      - MYSQL_DATABASE=dealnews
-      - DISABLE_PROXY=true
-      - DISABLE_MYSQL=false
-      - CAPTURE_MODE=full
-      - FORCE_UPDATE=true
-      - CLEAR_DATA=true
-      - LOG_LEVEL=WARNING
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-dealnews}
+      DISABLE_MYSQL: ${DISABLE_MYSQL:-false}
+      DISABLE_PROXY: ${DISABLE_PROXY:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+      DOWNLOAD_DELAY: ${DOWNLOAD_DELAY:-0.05}
+      CONCURRENT_REQUESTS: ${CONCURRENT_REQUESTS:-64}
+      CONCURRENT_REQUESTS_PER_DOMAIN: ${CONCURRENT_REQUESTS_PER_DOMAIN:-32}
+      AUTOTHROTTLE_TARGET_CONCURRENCY: ${AUTOTHROTTLE_TARGET_CONCURRENCY:-24}
+      PROXY_HOST: ${PROXY_HOST:-p.webshare.io}
+      PROXY_PORT: ${PROXY_PORT:-80}
+      PROXY_USER: ${PROXY_USER}
+      PROXY_PASS: ${PROXY_PASS}
     volumes:
       - ./exports:/app/exports
-      - ./logs:/app/logs
     depends_on:
       - mysql
-    command: python3 run.py
+    command: scrapy crawl dealnews
 
 volumes:
   mysql_data:

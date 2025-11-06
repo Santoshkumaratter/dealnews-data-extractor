@@ -1,237 +1,368 @@
-# DealNews Scraper - Laradock Integration Ready
+# DealNews Scraper
 
-A complete, production-ready Scrapy-based web scraper for extracting deals, promotions, and reviews from dealnews.com. **Optimized for Laradock users** - integrates seamlessly with your existing MySQL setup.
+A production-ready Scrapy-based web scraper for extracting deals from dealnews.com. Optimized to extract 100,000+ deals with full data normalization into MySQL.
 
-## 🚨 **IMPORTANT UPDATE: MySQL Connection Fix (October 2025)**
+## Features
 
-The scraper now works **even without MySQL** - it will automatically export data to JSON and CSV files if MySQL is not available.
+- ✅ Scrapy framework with webshare.io proxy support
+- ✅ Complete data normalization (deals, images, categories, related deals)
+- ✅ Robust parsing with CSS/XPath selectors + raw HTML snapshot for audit
+- ✅ Proxy middleware with retry/backoff, rotating UA, AutoThrottle, 429 handling
+- ✅ Daily cron job setup for automated runs
+- ✅ Dockerized with docker-compose (scraper, MySQL, phpMyAdmin)
+- ✅ CSV/JSON exports for debugging
+- ✅ Unit tests for parser
 
-## 🎯 **What You Need to Do (Super Simple)**
+## Quick Start - Final Setup Instructions
 
-### **If you have MySQL running:**
-1. **Copy environment file**: `cp .env-template .env`
-2. **Run the MySQL fix script**: `python3 fix_mysql.py`
-3. **Run scraper**: `python3 run.py`
-4. **Check your data**: Go to http://localhost:8081 (Adminer) or your existing phpMyAdmin
-
-### **If you don't have MySQL:**
-1. **Copy environment file**: `cp .env-template .env`
-2. **Disable MySQL**: `echo "DISABLE_MYSQL=true" >> .env`
-3. **Run scraper**: `python3 run.py`
-4. **Clean the exports**: `python3 fix_export.py`
-5. **Check your data**: Look in `exports/clean_deals_*.json` and `exports/clean_deals_*.csv`
-
-**That's it! No Docker knowledge needed.** 🚀
-
-### **If you prefer Docker:**
-1. **Copy environment file**: `cp env.example .env`
-2. **Disable MySQL if needed**: `echo "DISABLE_MYSQL=true" >> .env`
-3. **Run with Docker**: `docker-compose up scraper`
-4. **Clean the exports**: `python3 fix_export.py`
-
-## 🛡️ **Latest Updates - All Errors Fixed (October 2025)**
-
-### **✅ CRITICAL FIXES APPLIED**
-- **FIXED: MySQL Connection Issues**: Scraper now works without MySQL, automatically exporting to JSON/CSV
-- **FIXED: Database Connection Handling**: Gracefully handles MySQL connection failures
-- **FIXED: Export Cleaning**: Added `fix_export.py` to clean navigation items from exports
-- **FIXED: Low Database Save Ratio**: Now saves 100% of extracted deals (was <10%)
-- **FIXED: Empty deal_filters Table**: Now properly populates all filter fields
-- **FIXED: Unstable dealid Generation**: Now uses stable hash of absolute deallink URL
-- **FIXED: CSV Export Added**: Now exports both JSON and CSV formats
-
-### **✅ Enhanced Reliability Features**
-- **Automatic MySQL Detection**: Checks if MySQL is available and falls back to JSON/CSV export
-- **Export Cleaning**: Removes navigation items and other non-deal content
-- **Smart Headers**: Accept, Accept-Language, Sec-Fetch-*, Connection, Cache-Control
-- **Error Detection**: Automatic detection of 404 error content in responses
-- **URL Validation**: Comprehensive filtering of invalid URL patterns
-- **Retry Strategy**: Different retry counts for 403 (5x), 429 (3x), 503 (3x) errors
-
-## 📊 **Accessing Your Data**
-
-### **With MySQL:**
-- **Database**: http://localhost:8081 (Adminer) or your existing phpMyAdmin
-- **JSON Export**: `exports/deals.json`
-- **CSV Export**: `exports/deals.csv`
-
-### **Without MySQL:**
-- **Raw Exports**: `exports/deals.json` and `exports/deals.csv`
-- **Clean Exports**: `exports/clean_deals_*.json` and `exports/clean_deals_*.csv`
-
-## 🔧 **Troubleshooting**
-
-### **MySQL Connection Issues**
-If you're having trouble connecting to MySQL:
+### Step 1: Setup Environment
 
 ```bash
-# Run the MySQL fix script
-python3 fix_mysql.py
-
-# If that doesn't work, disable MySQL and use JSON/CSV export
-echo "DISABLE_MYSQL=true" >> .env
-python3 run.py
-```
-
-### **Export Cleaning**
-If your exports contain navigation items or other non-deal content:
-
-```bash
-# Clean the exports
-python3 fix_export.py
-```
-
-### **Docker Issues**
-If you're having trouble with Docker:
-
-```bash
-# Make sure Docker is installed and running
-docker --version
-
-# If Docker is not installed, run without Docker
-python3 run.py
-
-# If Docker is installed but not running, start Docker Desktop
-# Then run:
-docker-compose up scraper
-```
-
-## 📋 **Complete Command Reference**
-
-### **Basic Usage (No Docker)**
-
-```bash
-# 1. Clone the repository
-git clone <repository-url>
-cd dealnews-data-extractor
-
-# 2. Set up the environment
-cp .env-template .env
-
-# 3. Test MySQL connection
-python3 fix_mysql.py
-
-# 4a. If MySQL is working:
-python3 run.py
-
-# 4b. If MySQL is NOT working:
-echo "DISABLE_MYSQL=true" >> .env
-python3 run.py
-
-# 5. Clean the exports (removes navigation items)
-python3 fix_export.py
-
-# 6. Check your data
-ls -la exports/clean_deals_*
-```
-
-### **Docker Usage**
-
-```bash
-# 1. Clone the repository
-git clone <repository-url>
-cd dealnews-data-extractor
-
-# 2. Set up the environment
+# Copy environment file
 cp env.example .env
 
-# 3. Run with Docker
-docker-compose up scraper
-
-# 4. Clean the exports (removes navigation items)
-python3 fix_export.py
-
-# 5. Check your data
-ls -la exports/clean_deals_*
+# Edit .env file with your MySQL credentials
+# Set MYSQL_PASSWORD=your_password (or leave empty if no password)
+# Set DISABLE_PROXY=true for local testing (or configure webshare.io proxy)
 ```
 
-### **Advanced Options**
+### Step 2: Install Dependencies
 
 ```bash
-# Force update existing deals
-echo "FORCE_UPDATE=true" >> .env
-
-# Clear all existing data before scraping
-echo "CLEAR_DATA=true" >> .env
-
-# Set capture mode (full or incremental)
-echo "CAPTURE_MODE=full" >> .env  # First run
-echo "CAPTURE_MODE=incremental" >> .env  # Daily runs
-
-# Reduce log file size
-echo "LOG_LEVEL=WARNING" >> .env
+pip install -r requirements.txt
 ```
 
-## 📊 **Database Structure (Normalized)**
+### Step 3: Initialize Database (REQUIRED - Run First!)
 
-The scraper uses a **professional normalized database structure** with 9 separate tables:
+```bash
+python3 init_database.py
+```
 
-### **Main Tables:**
-- **`deals`** - Main deals table
-- **`stores`** - Normalized store data
-- **`categories`** - Normalized category data  
-- **`brands`** - Normalized brand data
-- **`collections`** - Normalized collection data
-- **`deal_images`** - Deal images
-- **`deal_categories`** - Many-to-many relationships
-- **`related_deals`** - Related deals
-- **`deal_filters`** - All filter variables
+This creates:
+- `dealnews` database
+- `deals` table (main deal information)
+- `deal_images` table (multiple images per deal)
+- `deal_categories` table (multiple categories per deal)
+- `related_deals` table (related deals per deal)
 
-## 📁 **Project Structure**
+**⚠️ IMPORTANT: Always run this step first before scraping!**
+
+### Step 4: Run Scraper (100,000+ Deals)
+
+```bash
+# Run the scraper (target: 100,000+ deals, optimized for speed)
+python3 run_scraper.py
+```
+
+**Expected Time:** 2-4 hours for 100,000+ deals (depending on network speed)
+
+**Progress Monitoring:**
+- Check progress: `python3 verify_mysql.py`
+- View logs: `tail -f logs/scraper_run.log`
+
+### Step 5: Verify Results
+
+```bash
+# Check database statistics
+python3 verify_mysql.py
+```
+
+This will show:
+- Total deals saved
+- Total images
+- Total categories
+- Total related deals
+- Top categories and stores
+
+### Step 6: Setup Daily Cron Job (Optional)
+
+```bash
+chmod +x setup_cron.sh
+./setup_cron.sh
+```
+
+This sets up a daily cron job to run at 2:00 AM.
+
+## Quick Commands Summary
+
+```bash
+# 1. Initialize database (run first!)
+python3 init_database.py
+
+# 2. Run scraper (100k+ deals)
+python3 run_scraper.py
+
+# 3. Check progress
+python3 verify_mysql.py
+
+# 4. View logs
+tail -f logs/scraper_run.log
+```
+
+## Database Schema
+
+### Tables
+
+#### `deals` - Main deal information
+- `id` - Auto-increment primary key
+- `dealid` - Unique deal identifier (VARCHAR(50), UNIQUE)
+- `recid` - Recommendation ID
+- `url` - Source URL
+- `title` - Deal title
+- `price` - Deal price
+- `promo` - Promo code/information
+- `category` - Primary category (single value)
+- `store` - Store name (e.g., "Amazon")
+- `deal` - Deal text (e.g., "Up to 80% off")
+- `dealplus` - Additional deal info (e.g., "free shipping w/ Prime")
+- `deallink` - Direct deal link
+- `dealtext` - Deal description text
+- `dealhover` - Hover text
+- `published` - Publication timestamp
+- `popularity` - Popularity rating (e.g., "5/5")
+- `staffpick` - Staff pick status
+- `detail` - Full deal description
+- `raw_html` - Raw HTML snapshot for audit
+- `created_at` - Record creation timestamp
+- `updated_at` - Record update timestamp
+
+#### `deal_images` - Multiple images per deal
+- `id` - Auto-increment primary key
+- `dealid` - Foreign key to deals.dealid
+- `imageurl` - Image URL (TEXT)
+- `created_at` - Record creation timestamp
+- **Unique constraint**: `(dealid, imageurl)` - prevents duplicate images
+
+#### `deal_categories` - Multiple categories per deal
+- `id` - Auto-increment primary key
+- `dealid` - Foreign key to deals.dealid
+- `category_id` - Category ID (e.g., "142" from URL /c142/)
+- `category_name` - Category name (e.g., "Electronics", "Amazon Prime Day")
+- `category_url` - Category URL
+- `category_title` - Category title
+- `created_at` - Record creation timestamp
+
+#### `related_deals` - Related deals per deal
+- `id` - Auto-increment primary key
+- `dealid` - Foreign key to deals.dealid
+- `relatedurl` - Related deal URL (TEXT)
+- `created_at` - Record creation timestamp
+- **Unique constraint**: `(dealid, relatedurl)` - prevents duplicate related deals
+
+## Sample Queries
+
+### Get all deals with images
+
+```sql
+SELECT d.*, COUNT(di.id) as image_count
+FROM deals d
+LEFT JOIN deal_images di ON d.dealid = di.dealid
+GROUP BY d.id
+ORDER BY d.created_at DESC
+LIMIT 10;
+```
+
+### Get deals with all categories
+
+```sql
+SELECT d.dealid, d.title, d.store, 
+       GROUP_CONCAT(dc.category_name SEPARATOR ', ') as categories
+FROM deals d
+LEFT JOIN deal_categories dc ON d.dealid = dc.dealid
+GROUP BY d.dealid, d.title, d.store
+LIMIT 10;
+```
+
+### Get deals by store with image count
+
+```sql
+SELECT d.store, COUNT(DISTINCT d.dealid) as deal_count,
+       COUNT(DISTINCT di.id) as total_images
+FROM deals d
+LEFT JOIN deal_images di ON d.dealid = di.dealid
+WHERE d.store IS NOT NULL AND d.store != ''
+GROUP BY d.store
+ORDER BY deal_count DESC
+LIMIT 10;
+```
+
+### Get deals with related deals
+
+```sql
+SELECT d.dealid, d.title, COUNT(rd.id) as related_count
+FROM deals d
+LEFT JOIN related_deals rd ON d.dealid = rd.dealid
+GROUP BY d.dealid, d.title
+HAVING related_count > 0
+ORDER BY related_count DESC
+LIMIT 10;
+```
+
+### Get all images for a specific deal
+
+```sql
+SELECT di.*
+FROM deal_images di
+WHERE di.dealid = 'your_deal_id'
+ORDER BY di.created_at;
+```
+
+### Get all categories for a specific deal
+
+```sql
+SELECT dc.*
+FROM deal_categories dc
+WHERE dc.dealid = 'your_deal_id'
+ORDER BY dc.category_name;
+```
+
+### Search deals by category
+
+```sql
+SELECT DISTINCT d.*
+FROM deals d
+JOIN deal_categories dc ON d.dealid = dc.dealid
+WHERE dc.category_name LIKE '%Electronics%'
+ORDER BY d.created_at DESC
+LIMIT 20;
+```
+
+### Get deals with staff picks
+
+```sql
+SELECT d.*, COUNT(di.id) as image_count
+FROM deals d
+LEFT JOIN deal_images di ON d.dealid = di.dealid
+WHERE d.staffpick IS NOT NULL AND d.staffpick != ''
+GROUP BY d.id
+ORDER BY d.created_at DESC
+LIMIT 10;
+```
+
+## Configuration
+
+Edit `.env` file to configure:
+
+### MySQL Settings
+- `MYSQL_HOST` - MySQL host (default: localhost)
+- `MYSQL_PORT` - MySQL port (default: 3306)
+- `MYSQL_USER` - MySQL user (default: root)
+- `MYSQL_PASSWORD` - MySQL password
+- `MYSQL_DATABASE` - Database name (default: dealnews)
+
+### Scrapy Settings
+- `DOWNLOAD_DELAY` - Delay between requests (default: 0.05)
+- `CONCURRENT_REQUESTS` - Concurrent requests (default: 100)
+- `CONCURRENT_REQUESTS_PER_DOMAIN` - Per-domain concurrency (default: 50)
+- `AUTOTHROTTLE_ENABLED` - Enable AutoThrottle (default: true)
+- `AUTOTHROTTLE_TARGET_CONCURRENCY` - Target concurrency (default: 30.0)
+
+### Proxy Settings (webshare.io)
+- `PROXY_HOST` - Proxy host (default: p.webshare.io)
+- `PROXY_PORT` - Proxy port (default: 80)
+- `PROXY_USER` - Proxy username
+- `PROXY_PASS` - Proxy password
+- `DISABLE_PROXY` - Disable proxy for local testing (default: true)
+
+### Feature Flags
+- `DISABLE_MYSQL` - Disable MySQL storage (default: false)
+- `CLEAR_DATA` - Clear existing data before scraping (default: false)
+
+## Docker Setup
+
+### Using Docker Compose
+
+```bash
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f scraper
+
+# Stop all services
+docker-compose down
+```
+
+### Services
+
+- **MySQL**: Port 3306
+- **phpMyAdmin**: Port 8081 (http://localhost:8081)
+- **Scraper**: Runs on startup
+
+## Output
+
+- **MySQL Database**: All deals saved to normalized tables
+- **JSON Export**: `exports/deals.json` (if DISABLE_MYSQL=true)
+- **CSV Export**: `exports/deals.csv` (if DISABLE_MYSQL=true)
+- **Logs**: `logs/scraper_run.log`
+
+## Running Tests
+
+```bash
+python3 -m pytest tests/
+# or
+python3 tests/test_parser.py
+```
+
+## Performance
+
+- **Target**: 100,000+ deals
+- **Expected Time**: 2-4 hours for 100,000+ deals (depending on network speed)
+- **Concurrency**: 64 concurrent requests (optimized for speed)
+- **Rate Limiting**: AutoThrottle enabled with configurable delays
+- **Proxy Rotation**: Automatic via webshare.io middleware
+- **Retry Logic**: Automatic retry with exponential backoff
+- **Pagination**: Automatic deep pagination to reach 100k+ deals
+
+## Requirements
+
+- Python 3.9+
+- MySQL 8.0+ (running and accessible)
+- See `requirements.txt` for Python dependencies
+
+## Troubleshooting
+
+### MySQL Connection Error
+- Verify MySQL is running: `mysql -u root -p`
+- Check credentials in `.env` file
+- Ensure MySQL user has permissions to create databases
+
+### No Deals Scraped
+- Check internet connection
+- Verify dealnews.com is accessible
+- Check scraper logs in console output
+- Try reducing `CONCURRENT_REQUESTS` in `.env` if getting blocked
+
+### Proxy Issues
+- Verify webshare.io credentials in `.env`
+- Set `DISABLE_PROXY=true` for local testing
+- Check proxy logs in scraper output
+
+## Files Structure
 
 ```
 dealnews-data-extractor/
 ├── dealnews_scraper/          # Scrapy project
-│   ├── spiders/
-│   │   └── dealnews_spider.py # Main spider
-│   ├── items.py               # Data definitions
-│   ├── normalized_pipeline.py # Normalized MySQL pipeline
-│   ├── middlewares.py         # Middleware
+│   ├── spiders/               # Spiders
+│   ├── items.py               # Item definitions
+│   ├── middlewares.py         # Proxy middleware
+│   ├── normalized_pipeline.py # MySQL pipeline
 │   └── settings.py            # Scrapy settings
-├── exports/                   # Data exports
-│   ├── deals.json             # Raw JSON data
-│   ├── deals.csv              # Raw CSV data
-│   ├── clean_deals_*.json     # Cleaned JSON data
-│   └── clean_deals_*.csv      # Cleaned CSV data
-├── docker-compose.yml         # Docker setup
-├── Dockerfile                 # Container definition
-├── requirements.txt           # Dependencies
-├── run.py                     # Main runner
-├── fix_mysql.py               # MySQL connection fix script
-├── fix_export.py              # Export cleaning script
-├── .env-template              # Environment template
-├── .gitignore                 # Git ignore file
+├── mysql-init/                # Database initialization
+│   └── 01_create_deals.sql    # Table creation script
+├── tests/                     # Unit tests
+│   └── test_parser.py         # Parser tests
+├── exports/                   # JSON/CSV exports
+├── logs/                      # Log files
+├── docker-compose.yml         # Docker configuration
+├── init_database.py           # Database initialization script
+├── run_scraper.py             # Scraper runner
+├── verify_mysql.py            # Verification script
+├── run_full_test.py           # Full test script
+├── setup_cron.sh              # Cron setup script
 └── README.md                  # This file
 ```
 
-## 📄 **License**
+## License
 
-This project is for educational and commercial use. Please respect DealNews.com's terms of service and robots.txt file.
-
----
-
-## 🚀 **Ready to Use!**
-
-Your DealNews scraper is now **100% production-ready** with all client requirements fulfilled and **ALL ERRORS FIXED**:
-
-### **Quick Start (Recommended)**
-```bash
-# 1. Clone and setup
-git clone <your-repository-url>
-cd dealnews-data-extractor
-cp .env-template .env
-
-# 2. Run the MySQL fix script
-python3 fix_mysql.py
-
-# 3. Run the scraper
-python3 run.py
-
-# 4. Clean the exports
-python3 fix_export.py
-
-# 5. Check your data
-ls -la exports/clean_deals_*
-```
-
-The scraper is 100% complete and ready to use! 🎯
+This project is for educational and commercial use.
