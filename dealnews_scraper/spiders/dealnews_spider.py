@@ -134,7 +134,7 @@ class DealnewsSpider(scrapy.Spider):
                 unique_id = deal_id or deal_url or hash(deal_html[:200])
                 if unique_id not in seen:
                     seen.add(unique_id)
-                unique_deals.append(deal)
+                    unique_deals.append(deal)
         
         self.logger.info(f"Total unique deals found on {response.url}: {len(unique_deals)}")
         
@@ -373,15 +373,16 @@ class DealnewsSpider(scrapy.Spider):
                             category_item['category_url'] = cat['url']
                         if cat.get('@id'):
                             category_item['category_id'] = cat['@id']
-                yield category_item
+                        yield category_item
         except Exception as e:
             self.logger.error(f"Error extracting categories from JSON: {e}")
 
     def extract_related_deals_from_json(self, deal_data, item):
         """Extract related deals from JSON-LD data"""
         # JSON-LD doesn't typically contain related deals, so this is a placeholder
-        return
-        yield  # This makes it a generator
+        # Return empty generator
+        if False:
+            yield
 
     def extract_deal_item(self, deal, response):
         """Extract main deal item with IMPROVED SELECTORS"""
