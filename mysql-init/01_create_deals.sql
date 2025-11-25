@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS deals (
   title TEXT,
   price VARCHAR(100),
   promo TEXT,
-  category VARCHAR(100),
+  category VARCHAR(255),
   store VARCHAR(100),
   deal TEXT,
   dealplus TEXT,
@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS deal_images (
 
 -- Deal categories table (multiple categories per deal)
 -- One deal can have multiple categories (e.g., "Automotive", "Amazon Prime Day", "Staff Pick")
+-- Unique constraint on (dealid, category_name) prevents duplicate categories per deal
 CREATE TABLE IF NOT EXISTS deal_categories (
   id INT AUTO_INCREMENT PRIMARY KEY,
   dealid VARCHAR(50) NOT NULL,
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS deal_categories (
   category_url TEXT,
   category_title VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_deal_category (dealid, category_name(255)),
   INDEX idx_dealid (dealid),
   INDEX idx_category_name (category_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

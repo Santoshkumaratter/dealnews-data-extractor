@@ -67,7 +67,7 @@ def create_database_and_table():
                 title TEXT,
                 price VARCHAR(100),
                 promo TEXT,
-                category VARCHAR(100),
+                category VARCHAR(255),
                 store VARCHAR(100),
                 deal TEXT,
                 dealplus TEXT,

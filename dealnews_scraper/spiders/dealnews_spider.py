@@ -15,6 +15,8 @@ class DealnewsSpider(scrapy.Spider):
         self.deals_extracted = 0
         self.start_time = time.time()
         self.max_deals = 100000  # Target: 100,000+ deals
+        self.detail_pages_visited = 0
+        self.max_detail_pages = 1000  # Limit detail page visits to avoid overload
     
     # Optimized start URLs - pagination will automatically handle 100k+ deals
     start_urls = [
@@ -168,7 +170,21 @@ class DealnewsSpider(scrapy.Spider):
                 # Extract related data
                 yield from self.extract_deal_images(deal, item)
                 yield from self.extract_deal_categories(deal, item, response)
-                yield from self.extract_related_deals(deal, item)
+                yield from self.extract_related_deals(deal, item, response)
+                
+                # Optionally visit detail page for related deals (limited to avoid overload)
+                deallink = item.get('deallink') or item.get('url', '')
+                if deallink and self.detail_pages_visited < self.max_detail_pages and '/deals/' in deallink:
+                    # Visit detail page to get related deals (only for some deals to avoid overload)
+                    if self.deals_extracted % 10 == 0:  # Visit every 10th deal's detail page
+                        yield scrapy.Request(
+                            url=deallink,
+                            callback=self.parse_deal_detail,
+                            meta={'dealid': item['dealid'], 'item': item},
+                            errback=self.errback_http,
+                            dont_filter=True
+                        )
+                        self.detail_pages_visited += 1
         
         # Handle pagination
         if len(unique_deals) == 0 and 'start=' in response.url:
@@ -597,39 +613,31 @@ class DealnewsSpider(scrapy.Spider):
                 category_value = url_category
             item['category'] = category_value
 
-            # Extract categories from page-level breadcrumbs and tags
-            page_categories = []
-            # Extract from page breadcrumbs
-            page_breadcrumbs = response.css('.breadcrumb a, .breadcrumbs a, [class*="breadcrumb"] a')
-            for breadcrumb in page_breadcrumbs:
-                cat_name = breadcrumb.css('::text').get()
-                cat_url = breadcrumb.css('::attr(href)').get()
-                if cat_name and cat_name.strip():
-                    page_categories.append({
-                        'category_name': cat_name.strip(),
-                        'category_url': response.urljoin(cat_url) if cat_url else '',
-                        'category_id': re.search(r'/c(\d+)/', cat_url).group(1) if cat_url and re.search(r'/c(\d+)/', cat_url) else ''
-                    })
+            # Extract ONLY deal-specific categories (within deal container, NOT page-level)
+            # This prevents duplicate static data from being saved for every deal
+            deal_categories = []
             
-            # Extract from page tags/filters
-            page_tags = response.css('.tag a, .filter a, [class*="tag"] a, [class*="filter"] a')
-            for tag in page_tags:
-                tag_name = tag.css('::text').get()
-                tag_url = tag.css('::attr(href)').get()
-                if tag_name and tag_name.strip():
-                    page_categories.append({
-                        'category_name': tag_name.strip(),
-                        'category_title': tag_name.strip(),
-                        'category_url': response.urljoin(tag_url) if tag_url else ''
-                    })
+            # Extract category from URL if available (dynamic per page)
+            if url_category:
+                deal_categories.append({
+                    'category_name': url_category,
+                    'category_url': response.url,
+                    'category_id': re.search(r'/c(\d+)/', response.url).group(1) if re.search(r'/c(\d+)/', response.url) else ''
+                })
             
-            # Store categories for pipeline
-            if page_categories:
-                item['categories'] = page_categories
-            elif item['category']:
-                item['categories'] = [{'category_name': item['category']}]
-            else:
-                item['categories'] = []
+            # Extract deal-specific category from deal container only
+            if category_value:
+                deal_categories.append({
+                    'category_name': category_value
+                })
+            
+            # Store categories for pipeline (only deal-specific, no page-level static data)
+            # Always include main category if available
+            if not deal_categories and category_value:
+                deal_categories.append({
+                    'category_name': category_value
+                })
+            item['categories'] = deal_categories if deal_categories else []
             
             # Deal text and other fields
             item['deal'] = deal.css('.deal-text::text').get() or deal.css('.deal-description::text').get() or ''
@@ -650,11 +658,32 @@ class DealnewsSpider(scrapy.Spider):
             
             # Populate images and related deals on main item for pipeline usage
             try:
-                item['images'] = [u for u in deal.css('img::attr(src)').getall() if u]
-            except Exception:
+                # Try multiple image selectors to find deal images
+                images = (
+                    deal.css('img::attr(src)').getall() or
+                    deal.css('img::attr(data-src)').getall() or  # Lazy-loaded images
+                    deal.css('img::attr(data-lazy-src)').getall() or
+                    deal.css('[class*="image"] img::attr(src)').getall() or
+                    deal.css('[class*="deal"] img::attr(src)').getall()
+                )
+                # Filter out empty and invalid images
+                item['images'] = [u.strip() for u in images if u and u.strip() and not u.startswith('data:')]
+                if item['images']:
+                    self.logger.debug(f"Found {len(item['images'])} images for deal {dealid}")
+            except Exception as e:
+                self.logger.debug(f"Error extracting images: {e}")
                 item['images'] = []
+            # Extract related deals from deal container (if available on listing pages)
             try:
-                item['related_deals'] = deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall()
+                # Try multiple selectors for related/similar deals within deal container
+                related_links = (
+                    deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall() or
+                    deal.css('[class*="related"] a::attr(href), [class*="similar"] a::attr(href)').getall() or
+                    deal.css('a[href*="/deals/"]::attr(href), a[href*="/deal/"]::attr(href)').getall()[:3]  # Limit to 3 to avoid duplicates
+                )
+                # Filter out the current deal's own link
+                current_link = link or ''
+                item['related_deals'] = [rl for rl in related_links if rl and rl != current_link and rl != item.get('deallink', '')]
             except Exception:
                 item['related_deals'] = []
             
@@ -700,67 +729,154 @@ class DealnewsSpider(scrapy.Spider):
         return None
 
     def extract_deal_images(self, deal, item):
-        """Extract deal images"""
-        images = deal.css('img::attr(src)').getall()
+        """Extract deal images with multiple selectors"""
+        # Try multiple image selectors
+        images = (
+            deal.css('img::attr(src)').getall() or
+            deal.css('img::attr(data-src)').getall() or  # Lazy-loaded images
+            deal.css('img::attr(data-lazy-src)').getall() or
+            deal.css('[class*="image"] img::attr(src)').getall() or
+            deal.css('[class*="deal"] img::attr(src)').getall()
+        )
+        
+        seen_images = set()
         for img_url in images:
-            if img_url:
-                image_item = DealImageItem()
-                image_item['dealid'] = item['dealid']
-                image_item['imageurl'] = img_url
-                yield image_item
+            if img_url and img_url.strip() and not img_url.startswith('data:'):
+                img_url = img_url.strip()
+                if img_url not in seen_images:
+                    seen_images.add(img_url)
+                    image_item = DealImageItem()
+                    image_item['dealid'] = item['dealid']
+                    image_item['imageurl'] = img_url
+                    yield image_item
 
     def extract_deal_categories(self, deal, item, response):
-        """Extract deal categories from breadcrumbs, tags, and links"""
-        # Extract from breadcrumbs (e.g., "All Deals > Automotive > Amazon")
-        breadcrumbs = deal.css('.breadcrumb a, .breadcrumbs a, [class*="breadcrumb"] a')
-        for breadcrumb in breadcrumbs:
-            category_name = breadcrumb.css('::text').get()
-            category_url = breadcrumb.css('::attr(href)').get()
-            if category_name and category_name.strip():
-                category_item = DealCategoryItem()
-                category_item['dealid'] = item['dealid']
-                category_item['category_name'] = category_name.strip()
-                if category_url:
-                    category_url = response.urljoin(category_url)
-                    category_item['category_url'] = category_url
-                    # Extract category ID from URL if present (e.g., /c142/Electronics/)
-                    match = re.search(r'/c(\d+)/', category_url)
-                    if match:
-                        category_item['category_id'] = match.group(1)
-                yield category_item
+        """Extract ONLY deal-specific categories from within the deal container (NOT page-level)"""
+        # Extract category from URL (dynamic per page, but unique per deal's page context)
+        url_category = self.extract_category_from_url(response.url)
+        if url_category:
+            category_item = DealCategoryItem()
+            category_item['dealid'] = item['dealid']
+            category_item['category_name'] = url_category
+            category_item['category_url'] = response.url
+            # Extract category ID from URL if present (e.g., /c142/Electronics/)
+            match = re.search(r'/c(\d+)/', response.url)
+            if match:
+                category_item['category_id'] = match.group(1)
+            yield category_item
         
-        # Extract from tags/filters (e.g., "Amazon Prime Day", "Staff Pick", "Popularity: 5/5")
-        tags = deal.css('.tag a, .filter a, [class*="tag"] a, [class*="filter"] a, .label a')
-        for tag in tags:
-            tag_name = tag.css('::text').get()
-            tag_url = tag.css('::attr(href)').get()
-            if tag_name and tag_name.strip():
-                category_item = DealCategoryItem()
-                category_item['dealid'] = item['dealid']
-                category_item['category_name'] = tag_name.strip()
-                category_item['category_title'] = tag_name.strip()
-                if tag_url:
-                    tag_url = response.urljoin(tag_url)
-                    category_item['category_url'] = tag_url
-                yield category_item
+        # Extract deal-specific category from deal container only (scoped to this deal)
+        deal_category = deal.css('.category::text, .deal-category::text, .category-name::text').get()
+        if deal_category and deal_category.strip():
+            category_item = DealCategoryItem()
+            category_item['dealid'] = item['dealid']
+            category_item['category_name'] = deal_category.strip()
+            yield category_item
         
-        # Also extract from text-based categories/tags
-        category_texts = deal.css('.category::text, .tag::text, .label::text').getall()
-        for text in category_texts:
-            text = text.strip()
-            if text and len(text) > 1:
-                category_item = DealCategoryItem()
-                category_item['dealid'] = item['dealid']
-                category_item['category_name'] = text
-                yield category_item
+        # Extract deal-specific tags/labels within deal container only
+        # Use scoped selectors to avoid page-level elements
+        deal_tags = deal.css('.tag::text, .label::text, [class*="deal-tag"]::text, [class*="deal-label"]::text').getall()
+        seen_tags = set()
+        for tag_text in deal_tags:
+            tag_text = tag_text.strip() if tag_text else ''
+            # Skip generic/static tags that appear on every deal
+            if tag_text and len(tag_text) > 1 and tag_text.lower() not in ['deal', 'sale', 'offer', 'buy', 'shop']:
+                if tag_text not in seen_tags:
+                    seen_tags.add(tag_text)
+                    category_item = DealCategoryItem()
+                    category_item['dealid'] = item['dealid']
+                    category_item['category_name'] = tag_text
+                    yield category_item
 
-    def extract_related_deals(self, deal, item):
-        """Extract related deals"""
-        related_links = deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall()
+    def extract_related_deals(self, deal, item, response):
+        """Extract related deals from deal container (dynamic, deal-specific only)"""
+        # Extract related deals from within deal container only
+        related_links = (
+            deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall() or
+            deal.css('[class*="related"] a::attr(href), [class*="similar"] a::attr(href)').getall() or
+            []
+        )
+        
+        # Also try to extract from deal's main item if available
+        if item.get('related_deals'):
+            related_links.extend(item.get('related_deals', []))
+        
+        # Filter out duplicates and invalid links
+        seen_links = set()
+        current_deallink = item.get('deallink', '') or item.get('url', '')
+        
         for link in related_links:
-            if link:
+            if not link or not link.strip():
+                continue
+            
+            # Make absolute URL
+            try:
+                if not link.startswith('http'):
+                    link = response.urljoin(link)
+            except:
+                pass
+            
+            # Skip if it's the same as current deal's link
+            if link == current_deallink or link in seen_links:
+                continue
+            
+            # Only process valid deal URLs
+            if '/deals/' in link or '/deal/' in link or 'dealnews.com' in link:
+                seen_links.add(link)
                 related_item = RelatedDealItem()
                 related_item['dealid'] = item['dealid']
+                related_item['relatedurl'] = link
+                yield related_item
+
+    def parse_deal_detail(self, response):
+        """Parse individual deal detail page to extract related deals"""
+        dealid = response.meta.get('dealid', '')
+        item = response.meta.get('item', {})
+        
+        if not dealid:
+            return
+        
+        # Extract related deals from detail page (more likely to have them)
+        related_selectors = [
+            '.related-deals a::attr(href)',
+            '.related a::attr(href)',
+            '.similar-deals a::attr(href)',
+            '.similar a::attr(href)',
+            '[class*="related"] a[href*="/deals/"]::attr(href)',
+            '[class*="similar"] a[href*="/deals/"]::attr(href)',
+            'section[class*="related"] a::attr(href)',
+            'section[class*="similar"] a::attr(href)'
+        ]
+        
+        related_links = []
+        for selector in related_selectors:
+            links = response.css(selector).getall()
+            if links:
+                related_links.extend(links)
+                break
+        
+        # Yield related deal items
+        seen_links = set()
+        for link in related_links:
+            if not link or not link.strip():
+                continue
+            
+            # Make absolute URL
+            try:
+                if not link.startswith('http'):
+                    link = response.urljoin(link)
+            except:
+                continue
+            
+            # Skip duplicates and current deal
+            if link in seen_links or link == response.url:
+                continue
+            
+            # Only process valid deal URLs
+            if '/deals/' in link or '/deal/' in link:
+                seen_links.add(link)
+                related_item = RelatedDealItem()
+                related_item['dealid'] = dealid
                 related_item['relatedurl'] = link
                 yield related_item
 

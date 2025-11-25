@@ -134,7 +134,7 @@ class NormalizedMySQLPipeline:
                 title TEXT,
                 price VARCHAR(100),
                 promo TEXT,
-                category VARCHAR(100),
+                category VARCHAR(255),
                 store VARCHAR(100),
                 deal TEXT,
                 dealplus TEXT,
@@ -170,6 +170,7 @@ class NormalizedMySQLPipeline:
         self.cursor.execute(create_images_table)
         
         # Deal categories table (multiple categories per deal)
+        # Unique constraint on (dealid, category_name) prevents duplicate categories per deal
         create_categories_table = """
         CREATE TABLE IF NOT EXISTS deal_categories (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -179,6 +180,7 @@ class NormalizedMySQLPipeline:
             category_url TEXT,
             category_title VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_deal_category (dealid, category_name(255)),
             INDEX idx_dealid (dealid),
             INDEX idx_category_name (category_name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -296,6 +298,15 @@ class NormalizedMySQLPipeline:
                     updated_at = NOW()
                 """
                 
+                # Clean HTML entities from category field and truncate if needed
+                category_value = (item.get('category', '') or '').strip()
+                # Decode HTML entities (e.g., &amp; -> &, &nbsp; -> space, &gt; -> >)
+                if category_value:
+                    import html
+                    category_value = html.unescape(category_value)
+                    # Truncate to 255 characters to fit VARCHAR(255)
+                    category_value = category_value[:255]
+                
                 deal_values = (
                     dealid,
                     item.get('recid', '') or '',
@@ -303,7 +314,7 @@ class NormalizedMySQLPipeline:
                     title,
                     item.get('price', '') or '',
                     item.get('promo', '') or '',
-                    item.get('category', '') or '',
+                    category_value,
                     item.get('store', '') or '',
                     item.get('deal', '') or '',
                     item.get('dealplus', '') or '',
@@ -321,22 +332,40 @@ class NormalizedMySQLPipeline:
                 self.deals_saved += 1
                 
                 # Also save images, categories, and related deals from the main item if present
-                if item.get('images'):
-                    for img_url in item.get('images', []):
-                        if img_url:
-                            self.save_image(dealid, img_url, spider)
+                images_list = item.get('images', [])
+                if images_list:
+                    spider.logger.debug(f"Saving {len(images_list)} images for deal {dealid}")
+                    for img_url in images_list:
+                        if img_url and img_url.strip():
+                            self.save_image(dealid, img_url.strip(), spider)
+                else:
+                    spider.logger.debug(f"No images found for deal {dealid}")
                 
-                if item.get('categories'):
-                    for cat in item.get('categories', []):
+                categories_list = item.get('categories', [])
+                if categories_list:
+                    spider.logger.debug(f"Saving {len(categories_list)} categories for deal {dealid}")
+                    for cat in categories_list:
                         if isinstance(cat, dict):
                             self.save_category(dealid, cat, spider)
-                        elif isinstance(cat, str):
-                            self.save_category(dealid, {'category_name': cat}, spider)
+                        elif isinstance(cat, str) and cat.strip():
+                            self.save_category(dealid, {'category_name': cat.strip()}, spider)
+                else:
+                    # At least save the main category from item if available
+                    main_category = item.get('category', '').strip()
+                    if main_category:
+                        spider.logger.debug(f"Saving main category '{main_category}' for deal {dealid}")
+                        self.save_category(dealid, {'category_name': main_category}, spider)
+                    else:
+                        spider.logger.debug(f"No categories found for deal {dealid}")
                 
-                if item.get('related_deals'):
-                    for rel_url in item.get('related_deals', []):
-                        if rel_url:
-                            self.save_related_deal(dealid, rel_url, spider)
+                related_deals_list = item.get('related_deals', [])
+                if related_deals_list:
+                    spider.logger.debug(f"Saving {len(related_deals_list)} related deals for deal {dealid}")
+                    for rel_url in related_deals_list:
+                        if rel_url and rel_url.strip():
+                            self.save_related_deal(dealid, rel_url.strip(), spider)
+                else:
+                    spider.logger.debug(f"No related deals found for deal {dealid}")
                 
                 if self.deals_saved % 100 == 0:
                     spider.logger.info(f"✅ Saved {self.deals_saved:,} deals, {self.images_saved:,} images, {self.categories_saved:,} categories, {self.related_deals_saved:,} related deals")
@@ -399,48 +428,73 @@ class NormalizedMySQLPipeline:
 
     def save_image(self, dealid, imageurl, spider):
         """Save image with unique constraint (handles duplicates)"""
+        if not dealid or not imageurl or not imageurl.strip():
+            return
+        
         try:
+            # Make image URL absolute if relative
+            if not imageurl.startswith('http'):
+                # Try to construct absolute URL (will be handled by spider if needed)
+                pass
+            
             image_sql = """
             INSERT INTO deal_images (dealid, imageurl, created_at)
             VALUES (%s, %s, NOW())
             ON DUPLICATE KEY UPDATE created_at = created_at
             """
-            self.cursor.execute(image_sql, (dealid, imageurl))
+            self.cursor.execute(image_sql, (dealid, imageurl.strip()))
             self.images_saved += 1
+            spider.logger.debug(f"✅ Saved image for deal {dealid}: {imageurl[:50]}...")
         except mysql.connector.Error as err:
             # Ignore duplicate key errors (expected)
             if "Duplicate entry" not in str(err):
-                spider.logger.debug(f"Error saving image: {err}")
+                spider.logger.warning(f"❌ Error saving image for deal {dealid}: {err}")
 
     def save_category(self, dealid, cat_data, spider):
-        """Save category"""
+        """Save category with unique constraint (handles duplicates)"""
         try:
+            category_name = (cat_data.get('category_name', '') or '').strip()
+            if not category_name:
+                return  # Skip empty categories
+            
             category_sql = """
             INSERT INTO deal_categories (dealid, category_id, category_name, category_url, category_title, created_at)
             VALUES (%s, %s, %s, %s, %s, NOW())
+            ON DUPLICATE KEY UPDATE 
+                category_id = VALUES(category_id),
+                category_url = VALUES(category_url),
+                category_title = VALUES(category_title),
+                created_at = created_at
             """
             self.cursor.execute(category_sql, (
                 dealid,
                 cat_data.get('category_id', '') or '',
-                cat_data.get('category_name', '') or '',
+                category_name,
                 cat_data.get('category_url', '') or '',
                 cat_data.get('category_title', '') or ''
             ))
             self.categories_saved += 1
+            spider.logger.debug(f"✅ Saved category '{category_name}' for deal {dealid}")
         except mysql.connector.Error as err:
-            spider.logger.debug(f"Error saving category: {err}")
+            # Ignore duplicate key errors (expected due to unique constraint)
+            if "Duplicate entry" not in str(err):
+                spider.logger.warning(f"❌ Error saving category for deal {dealid}: {err}")
 
     def save_related_deal(self, dealid, relatedurl, spider):
         """Save related deal with unique constraint (handles duplicates)"""
+        if not dealid or not relatedurl or not relatedurl.strip():
+            return
+        
         try:
             related_sql = """
             INSERT INTO related_deals (dealid, relatedurl, created_at)
             VALUES (%s, %s, NOW())
             ON DUPLICATE KEY UPDATE created_at = created_at
             """
-            self.cursor.execute(related_sql, (dealid, relatedurl))
+            self.cursor.execute(related_sql, (dealid, relatedurl.strip()))
             self.related_deals_saved += 1
+            spider.logger.debug(f"✅ Saved related deal for deal {dealid}: {relatedurl[:50]}...")
         except mysql.connector.Error as err:
             # Ignore duplicate key errors (expected)
             if "Duplicate entry" not in str(err):
-                spider.logger.debug(f"Error saving related deal: {err}")
+                spider.logger.warning(f"❌ Error saving related deal for deal {dealid}: {err}")
