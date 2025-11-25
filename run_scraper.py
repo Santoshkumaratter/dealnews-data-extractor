@@ -6,8 +6,17 @@ import os
 import sys
 import subprocess
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+# Ensure .env overrides any pre-set shell variables (so DISABLE_PROXY=false takes effect)
+load_dotenv(override=True)
+# Fallback: if .env not present or incomplete, also load env.example (won't override existing)
+if not os.getenv('PROXY_USER') or not os.getenv('PROXY_PASS') or not os.getenv('DISABLE_PROXY'):
+    example_path = Path(__file__).parent / 'env.example'
+    if example_path.exists():
+        load_dotenv(dotenv_path=str(example_path), override=False)
+# Default to enabling proxy if still not specified
+os.environ.setdefault('DISABLE_PROXY', 'false')
 
 def main():
     print("=" * 60)

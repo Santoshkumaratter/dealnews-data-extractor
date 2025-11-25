@@ -8,7 +8,7 @@ from datetime import datetime
 class DealnewsSpider(scrapy.Spider):
     name = "dealnews"
     allowed_domains = ["dealnews.com"]
-    handle_httpstatus_list = [403, 404]  # Handle these status codes explicitly
+    handle_httpstatus_list = [400, 403, 404]  # Handle these status codes explicitly
     
     def __init__(self):
         super().__init__()
@@ -49,6 +49,9 @@ class DealnewsSpider(scrapy.Spider):
 
     def parse(self, response):
         """Main parsing method with IMPROVED DEAL EXTRACTION"""
+        if response.status == 400:
+            self.logger.warning(f"400 error for URL: {response.url} - stopping this branch")
+            return
         if response.status == 404:
             self.logger.warning(f"404 error for URL: {response.url}")
             return
@@ -121,6 +124,20 @@ class DealnewsSpider(scrapy.Spider):
                 except:
                     pass
         
+        # Strategy 6: DealNews click-out links (very common on listing pages)
+        click_links = response.css('a[href*="lw/click.html"]')
+        for a in click_links:
+            # Prefer nearest meaningful container
+            parent = (
+                a.xpath('./ancestor::article[1]') or
+                a.xpath('./ancestor::*[contains(@class, "deal") or contains(@class, "offer") or contains(@class, "snippet") or contains(@class, "item") or contains(@class, "card")][1]')
+            )
+            if parent:
+                deals.extend(parent)
+            else:
+                # Fallback to link's immediate parent
+                deals.append(a.xpath('..'))
+        
         # Remove duplicates
         seen = set()
         unique_deals = []
@@ -154,6 +171,10 @@ class DealnewsSpider(scrapy.Spider):
                 yield from self.extract_related_deals(deal, item)
         
         # Handle pagination
+        if len(unique_deals) == 0 and 'start=' in response.url:
+            # Likely reached the end for this pagination stream (e.g., invalid/high start offset)
+            self.logger.info(f"No deals found on {response.url}; stopping further pagination for this path")
+            return
         yield from self.handle_pagination(response)
         
         # Log progress
@@ -441,6 +462,8 @@ class DealnewsSpider(scrapy.Spider):
                 '.deal-content h3::text',
                 '.deal-content h4::text',
                 '.deal-content .title::text',
+                # Click-out link text often carries the product/deal line
+                'a[href*="lw/click.html"]::text',
                 # Generic fallbacks
                 '.title::text', 
                 'h1::text',
@@ -472,7 +495,10 @@ class DealnewsSpider(scrapy.Spider):
                     item['title'] = title.strip()
                     break
             else:
-                item['title'] = 'No title found'
+                # Fallbacks: aria-label/title attributes or nearby snippet text
+                attr_title = deal.css('[aria-label]::attr(aria-label), [title]::attr(title)').get()
+                para = deal.css('p::text').get()
+                item['title'] = (attr_title or para or 'No title found').strip()
             
             # IMPROVED Price extraction with UPDATED selectors
             price_selectors = [
@@ -740,6 +766,10 @@ class DealnewsSpider(scrapy.Spider):
 
     def handle_pagination(self, response):
         """Handle pagination and infinite scroll for DealNews - OPTIMIZED for 100k+ deals"""
+        # Stop paginating on non-200 responses
+        if response.status != 200:
+            self.logger.info(f"Skipping pagination due to status {response.status} for {response.url}")
+            return
         if self.deals_extracted >= self.max_deals:
             return
         
@@ -752,15 +782,9 @@ class DealnewsSpider(scrapy.Spider):
             if match:
                 current_start = int(match.group(1))
         
-        # Generate pagination URLs dynamically (faster than parsing HTML)
-        max_pages_to_follow = min(5000, (self.max_deals - self.deals_extracted) // 20)  # Assume 20 deals per page
-        
-        for i in range(1, max_pages_to_follow + 1):
-            if self.deals_extracted >= self.max_deals:
-                break
-                
-            next_start = current_start + (i * 20)
-            
+        # Generate ONLY the immediate next page to avoid flooding requests
+        next_start = current_start + 20
+        if next_start > current_start:
             # Build next page URL
             if '?' in response.url:
                 if 'start=' in response.url:
@@ -772,6 +796,7 @@ class DealnewsSpider(scrapy.Spider):
             
             if self.is_valid_dealnews_url(next_url):
                 yield response.follow(next_url, self.parse, errback=self.errback_http, dont_filter=False)
+                return  # Do not expand further via HTML links in the same response
         
         # Also look for pagination links in HTML
         pagination_patterns = [

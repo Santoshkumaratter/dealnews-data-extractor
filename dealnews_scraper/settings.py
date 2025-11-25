@@ -28,8 +28,8 @@ CONCURRENT_REQUESTS_PER_DOMAIN = int(os.getenv('CONCURRENT_REQUESTS_PER_DOMAIN',
 REACTOR_THREADPOOL_SIZE = 32  # Optimized thread pool
 
 DOWNLOADER_MIDDLEWARES = {
-    # Enable improved custom middleware
-    'dealnews_scraper.middlewares.ProxyMiddleware': 350,
+    # Enable improved custom middleware (higher than RetryMiddleware so 407 handling wins)
+    'dealnews_scraper.middlewares.ProxyMiddleware': 600,
     # Enable default user agent middleware
     'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': 400,
     'scrapy.downloadermiddlewares.retry.RetryMiddleware': 550,
@@ -65,7 +65,7 @@ USER_AGENT_LIST = [
 RANDOM_UA_PER_DOMAIN = True
 
 # Handle various HTTP responses properly - allow more error codes
-HTTPERROR_ALLOWED_CODES = [429, 403, 404, 301, 302, 503, 500]
+HTTPERROR_ALLOWED_CODES = [400, 429, 403, 404, 301, 302, 503, 500]
 RETRY_HTTP_CODES = [500, 503, 504, 408, 429]  # Remove 403 and 404 from retry to avoid loops
 RETRY_PRIORITY_ADJUST = -1
 

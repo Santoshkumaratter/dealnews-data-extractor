@@ -10,6 +10,9 @@ load_dotenv()
 
 class ProxyMiddleware:
     def __init__(self):
+        # Runtime flags/counters
+        self.disable_proxy_runtime = False
+        self.consecutive_407_count = 0
         self.user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -48,6 +51,10 @@ class ProxyMiddleware:
         # Rotate UA on every request
         request.headers['User-Agent'] = random.choice(self.user_agents)
         
+        # If runtime fallback disabled proxy, skip applying proxy
+        if self.disable_proxy_runtime:
+            return None
+
         # Set comprehensive browser-like headers to avoid detection
         request.headers.setdefault('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7')
         request.headers.setdefault('Accept-Language', 'en-US,en;q=0.9')
@@ -67,8 +74,8 @@ class ProxyMiddleware:
             request.headers.setdefault('Sec-Ch-Ua-Mobile', '?0')
             request.headers.setdefault('Sec-Ch-Ua-Platform', '"Windows"')
 
-        # Check if proxy should be disabled (for local testing)
-        if os.getenv('DISABLE_PROXY', 'true').lower() in ('1', 'true', 'yes'):
+        # Check if proxy should be disabled (for local testing) - default to enabled
+        if os.getenv('DISABLE_PROXY', 'false').lower() in ('1', 'true', 'yes'):
             spider.logger.debug("Proxy disabled for local testing")
             return None
             
@@ -84,6 +91,22 @@ class ProxyMiddleware:
         # On network errors/timeouts: rotate UA and proxy, then retry with delay
         exception_name = type(exception).__name__
         spider.logger.warning(f"Request exception: {exception_name} for {request.url}; rotating proxy/UA and retrying with delay")
+
+        # If proxy auth failed (407), disable proxy for this request to avoid hard fail
+        exc_text = str(exception)
+        if 'Proxy Authentication Required' in exc_text or '407' in exc_text:
+            spider.logger.error("Proxy authentication failed (407). Disabling proxy immediately for the rest of the run.")
+            if 'proxy' in request.meta:
+                request.meta.pop('proxy', None)
+            # Disable proxy for the remainder of the run and clear auth header
+            self.disable_proxy_runtime = True
+            if 'Proxy-Authorization' in request.headers:
+                try:
+                    del request.headers['Proxy-Authorization']
+                except Exception:
+                    pass
+            request.dont_filter = True
+            return request
 
         # Rotate user agent
         request.headers['User-Agent'] = random.choice(self.user_agents)
@@ -101,6 +124,19 @@ class ProxyMiddleware:
         if response.status == 429:
             spider.logger.info(f"Received 429 for {request.url}. Rotating proxy and retrying.")
             self._apply_proxy(request, spider, force_rotate=True)
+            request.dont_filter = True
+            return request
+        elif response.status == 407:
+            # Proxy authentication required
+            spider.logger.error(f"Received 407 (Proxy Authentication Required) for {request.url}. Disabling proxy immediately for the rest of the run.")
+            request.meta.pop('proxy', None)
+            # Disable proxy for the remainder of the run and clear auth header
+            self.disable_proxy_runtime = True
+            if 'Proxy-Authorization' in request.headers:
+                try:
+                    del request.headers['Proxy-Authorization']
+                except Exception:
+                    pass
             request.dont_filter = True
             return request
         elif response.status == 403:
@@ -129,20 +165,31 @@ class ProxyMiddleware:
             spider.logger.warning(f"Received 404 for {request.url}. Skipping this URL.")
             # Don't retry 404 errors, just log and continue
             return response
+        elif response.status == 400:
+            # Bad request usually indicates invalid/overflown pagination; do not retry
+            spider.logger.info(f"Received 400 for {request.url}. Not retrying this URL.")
+            return response
         elif response.status == 503:
             spider.logger.warning(f"Received 503 for {request.url}. Server overloaded, retrying with delay.")
             request.dont_filter = True
             return request
+        
+        # On successful response, reset 407 counter
+        if 200 <= response.status < 400:
+            if self.consecutive_407_count:
+                self.consecutive_407_count = 0
         return response
 
     def _apply_proxy(self, request, spider, force_rotate: bool = False):
+        # Allow a full proxy URL override: e.g. http://user:pass@host:port
+        proxy_url_override = os.getenv("PROXY_URL", "").strip()
         proxy_user = os.getenv("PROXY_USER")
         proxy_pass = os.getenv("PROXY_PASS")
         proxy_auth_header: Optional[str] = None
 
         # Debug proxy configuration
-        if not proxy_user or not proxy_pass:
-            spider.logger.warning("Proxy credentials not found - running without proxy")
+        if not proxy_url_override and (not proxy_user or not proxy_pass):
+            spider.logger.warning("Proxy credentials/URL not found - running without proxy")
             return
 
         # Prefer explicit proxy pool if provided
@@ -150,14 +197,23 @@ class ProxyMiddleware:
             proxy = random.choice(self.proxy_pool)
             spider.logger.debug(f"Using proxy from pool: {proxy}")
         else:
-            # Webshare rotating gateway
-            proxy_host = os.getenv("PROXY_HOST", "p.webshare.io")
-            proxy_port = os.getenv("PROXY_PORT", "80")
-            proxy = f"http://{proxy_host}:{proxy_port}"
+            if proxy_url_override:
+                proxy = proxy_url_override
+            else:
+                # Webshare rotating gateway
+                proxy_host = os.getenv("PROXY_HOST", "p.webshare.io")
+                proxy_port = os.getenv("PROXY_PORT", "80")
+                proxy = f"http://{proxy_host}:{proxy_port}"
 
-        if proxy_user and proxy_pass:
-            # For Webshare proxy, use the credentials in the URL
-            proxy = f"http://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}"
+        if not proxy_url_override and proxy_user and proxy_pass:
+            # Add credentials to proxy URL
+            try:
+                parsed_no_auth = urlparse(proxy)
+                host_port = f"{parsed_no_auth.hostname}:{parsed_no_auth.port or 80}"
+                scheme = parsed_no_auth.scheme or "http"
+                proxy = f"{scheme}://{proxy_user}:{proxy_pass}@{host_port}"
+            except Exception:
+                proxy = f"http://{proxy_user}:{proxy_pass}@{os.getenv('PROXY_HOST','p.webshare.io')}:{os.getenv('PROXY_PORT','80')}"
 
         prior_proxy = request.meta.get('proxy')
         if force_rotate or prior_proxy != proxy:
@@ -169,3 +225,8 @@ class ProxyMiddleware:
                 spider.logger.info(f"Using proxy {host_port}")
             except Exception:
                 spider.logger.info("Using proxy (masked)")
+        
+        # Also attach Proxy-Authorization header when credentials are available
+        if not proxy_url_override and proxy_user and proxy_pass:
+            token = base64.b64encode(f"{proxy_user}:{proxy_pass}".encode()).decode()
+            request.headers['Proxy-Authorization'] = f"Basic {token}"
