@@ -16,7 +16,7 @@ class DealnewsSpider(scrapy.Spider):
         self.start_time = time.time()
         self.max_deals = 100000  # Target: 100,000+ deals
         self.detail_pages_visited = 0
-        self.max_detail_pages = 1000  # Limit detail page visits to avoid overload
+        self.max_detail_pages = 5000  # Increased limit to get more related deals (was 1000)
     
     # Optimized start URLs - pagination will automatically handle 100k+ deals
     start_urls = [
@@ -172,11 +172,11 @@ class DealnewsSpider(scrapy.Spider):
                 yield from self.extract_deal_categories(deal, item, response)
                 yield from self.extract_related_deals(deal, item, response)
                 
-                # Optionally visit detail page for related deals (limited to avoid overload)
+                # Visit detail page for related deals (increased frequency to get more related deals)
                 deallink = item.get('deallink') or item.get('url', '')
                 if deallink and self.detail_pages_visited < self.max_detail_pages and '/deals/' in deallink:
-                    # Visit detail page to get related deals (only for some deals to avoid overload)
-                    if self.deals_extracted % 10 == 0:  # Visit every 10th deal's detail page
+                    # Visit detail page to get related deals (visit every 5th deal for better coverage)
+                    if self.deals_extracted % 5 == 0:  # Visit every 5th deal's detail page (was 10th)
                         yield scrapy.Request(
                             url=deallink,
                             callback=self.parse_deal_detail,
@@ -442,9 +442,10 @@ class DealnewsSpider(scrapy.Spider):
             item = DealnewsItem()
             
             # Basic deal information - improved dealid generation (prefer absolute deal link)
-            dealid = deal.css('::attr(data-deal-id)').get() or deal.css('::attr(id)').get()
-            # We'll compute deallink first to derive a stable dealid if needed
-            link = deal.css('a::attr(href)').get()
+            # Try data-content-id first (new DealNews structure)
+            dealid = deal.css('::attr(data-content-id)').get() or deal.css('::attr(data-deal-id)').get() or deal.css('::attr(id)').get()
+            # Get actual deal URL from data-offer-url (new structure) or href
+            link = deal.css('::attr(data-offer-url)').get() or deal.css('a::attr(href)').get()
             if link:
                 try:
                     # Make absolute
@@ -458,6 +459,14 @@ class DealnewsSpider(scrapy.Spider):
                 else:
                     deal_text = deal.css('::text').get() or ''
                     dealid = f"deal_{hash((response.url + deal_text)[:200])}"
+            # Clean up dealid - remove "auto-id-" prefix if present
+            if dealid and dealid.startswith('auto-id-'):
+                # Use content-id or hash of link instead
+                content_id = deal.css('::attr(data-content-id)').get()
+                if content_id:
+                    dealid = f"deal_{content_id}"
+                elif link:
+                    dealid = f"deal_{hash(link)}"
 
             item['dealid'] = dealid
             item['recid'] = deal.css('::attr(data-rec-id)').get() or ''
@@ -465,6 +474,11 @@ class DealnewsSpider(scrapy.Spider):
             
             # IMPROVED Title extraction with UPDATED DealNews selectors
             title_selectors = [
+                # New DealNews structure (priority)
+                '.title-link::text',  # Actual deal title link
+                '.title a::text',  # Title with link
+                '.pitch .title::text',  # Title in pitch section
+                '.pitch .title-link::text',  # Title link in pitch
                 # DealNews specific (current site structure)
                 '.deal-title::text',
                 '.deal-name::text',
@@ -474,20 +488,14 @@ class DealnewsSpider(scrapy.Spider):
                 '.deal-summary::text',
                 # Current site selectors
                 '.deal-title-text::text',
-                '.deal-title-text::text',
                 '.deal-content h3::text',
                 '.deal-content h4::text',
                 '.deal-content .title::text',
-                # Click-out link text often carries the product/deal line
-                'a[href*="lw/click.html"]::text',
-                # Generic fallbacks
-                '.title::text', 
+                # Generic fallbacks (avoid .title::text as it matches "More Options" button)
                 'h1::text',
                 'h2::text',
                 'h3::text',
                 'h4::text',
-                'h5::text',
-                'h6::text',
                 '.product-title::text',
                 '.item-title::text',
                 '.listing-title::text',
@@ -496,24 +504,27 @@ class DealnewsSpider(scrapy.Spider):
                 # Link text (more targeted)
                 'a[href*="/deals/"]::text',
                 'a[href*="/deal/"]::text',
+                'a[href*="/products/"]::text',
                 # Other possibilities
                 '.name::text',
                 '.headline::text',
-                '.text::text',
                 '.description::text',
-                '.summary::text',
-                '.content::text'
+                '.summary::text'
             ]
             
             for selector in title_selectors:
                 title = deal.css(selector).get()
                 if title and title.strip() and len(title.strip()) > 5:
-                    item['title'] = title.strip()
-                    break
+                    # Skip common non-title text
+                    if title.strip().lower() not in ['more options', 'more', 'less', 'buy now', 'shop now', 'read more']:
+                        item['title'] = title.strip()
+                        break
             else:
                 # Fallbacks: aria-label/title attributes or nearby snippet text
-                attr_title = deal.css('[aria-label]::attr(aria-label), [title]::attr(title)').get()
-                para = deal.css('p::text').get()
+                attr_title = deal.css('[aria-label*="details"], [aria-label*="Read More"]::attr(aria-label)').get()
+                if not attr_title:
+                    attr_title = deal.css('[title]::attr(title)').get()
+                para = deal.css('.snippet.summary p::text, .summary p::text').get()
                 item['title'] = (attr_title or para or 'No title found').strip()
             
             # IMPROVED Price extraction with UPDATED selectors
@@ -561,56 +572,105 @@ class DealnewsSpider(scrapy.Spider):
             else:
                 item['price'] = ''
             
-            # IMPROVED Store extraction
-            store_selectors = [
-                # DealNews specific
-                '.store::text',
-                '.merchant::text',
-                '.retailer::text',
-                '.vendor::text',
-                '.deal-store::text',
-                '.deal-merchant::text',
-                # Generic
-                '.store-name::text',
-                '.merchant-name::text',
-                '.retailer-name::text',
-                '.vendor-name::text',
-                # With spans
-                'span[class*="store"]::text',
-                'span[class*="merchant"]::text',
-                'span[class*="retailer"]::text',
-                'span[class*="vendor"]::text'
-            ]
+            # IMPROVED Store extraction - try JSON-LD first, then data attributes, then CSS
+            store = ''
+            # Try to extract from JSON-LD script tag
+            json_ld_script = deal.css('script[type="application/ld+json"]::text').get()
+            if json_ld_script:
+                try:
+                    import json
+                    json_data = json.loads(json_ld_script)
+                    # Check for seller in offers
+                    if 'offers' in json_data and isinstance(json_data['offers'], list) and len(json_data['offers']) > 0:
+                        seller = json_data['offers'][0].get('seller', {})
+                        if isinstance(seller, dict):
+                            store = seller.get('name', '')
+                    # Also check direct seller
+                    if not store and 'seller' in json_data:
+                        seller = json_data['seller']
+                        if isinstance(seller, dict):
+                            store = seller.get('name', '')
+                except:
+                    pass
             
-            for selector in store_selectors:
-                store = deal.css(selector).get()
-                if store and store.strip():
-                    item['store'] = store.strip()
-                    break
-            else:
-                item['store'] = ''
+            # Try data-store attribute (store ID) - we can look it up or use key-attribute
+            if not store:
+                # Extract from key-attribute line (e.g., "Best Buy · 4 hrs ago")
+                store_text = deal.css('.key-attribute::text').get()
+                if store_text:
+                    # Extract store name before "·" or "|"
+                    store = store_text.split('·')[0].split('|')[0].strip()
             
-            # Extract category from deal element
-            category_selectors = [
-                '.category::text',
-                '.deal-category::text',
-                '.breadcrumb::text',
-                '.deal-breadcrumb::text',
-                '.category-name::text',
-                '.cat::text',
-                '.section::text',
-                '.department::text'
-            ]
+            # Fallback to CSS selectors
+            if not store:
+                store_selectors = [
+                    # DealNews specific
+                    '.store::text',
+                    '.merchant::text',
+                    '.retailer::text',
+                    '.vendor::text',
+                    '.deal-store::text',
+                    '.deal-merchant::text',
+                    # Generic
+                    '.store-name::text',
+                    '.merchant-name::text',
+                    '.retailer-name::text',
+                    '.vendor-name::text',
+                    # With spans
+                    'span[class*="store"]::text',
+                    'span[class*="merchant"]::text',
+                    'span[class*="retailer"]::text',
+                    'span[class*="vendor"]::text'
+                ]
+                
+                for selector in store_selectors:
+                    store = deal.css(selector).get()
+                    if store and store.strip():
+                        store = store.strip()
+                        break
             
-            url_category = self.extract_category_from_url(response.url)
+            item['store'] = store or ''
+            
+            # Extract category from deal element - try JSON-LD first, then data attributes, then CSS
             category_value = ''
-            for selector in category_selectors:
+            # Try to extract from JSON-LD script tag
+            json_ld_script = deal.css('script[type="application/ld+json"]::text').get()
+            if json_ld_script:
+                try:
+                    import json
+                    json_data = json.loads(json_ld_script)
+                    # Check for category in offers
+                    if 'offers' in json_data and isinstance(json_data['offers'], list) and len(json_data['offers']) > 0:
+                        category_obj = json_data['offers'][0].get('category', {})
+                        if isinstance(category_obj, dict):
+                            category_value = category_obj.get('name', '')
+                except:
+                    pass
+            
+            # Fallback to URL category
+            url_category = self.extract_category_from_url(response.url)
+            if not category_value and url_category:
+                category_value = url_category
+            
+            # Fallback to CSS selectors
+            if not category_value:
+                category_selectors = [
+                    '.category::text',
+                    '.deal-category::text',
+                    '.breadcrumb::text',
+                    '.deal-breadcrumb::text',
+                    '.category-name::text',
+                    '.cat::text',
+                    '.section::text',
+                    '.department::text'
+                ]
+                
+                for selector in category_selectors:
                     category = deal.css(selector).get()
                     if category and category.strip():
                         category_value = category.strip()
                         break
-            if not category_value and url_category:
-                category_value = url_category
+            
             item['category'] = category_value
 
             # Extract ONLY deal-specific categories (within deal container, NOT page-level)
@@ -643,7 +703,26 @@ class DealnewsSpider(scrapy.Spider):
             item['deal'] = deal.css('.deal-text::text').get() or deal.css('.deal-description::text').get() or ''
             item['dealplus'] = deal.css('.deal-plus::text').get() or ''
             item['promo'] = deal.css('.promo::text').get() or deal.css('.promotion::text').get() or ''
-            # Use the absolute deal link if available
+            # Use the absolute deal link if available (prefer actual deal URL over click.html redirect)
+            # If link is a click.html redirect, try to get the actual deal URL from JSON-LD or data-offer-url
+            if link and 'lw/click.html' in link:
+                # Try to get actual deal URL from JSON-LD
+                json_ld_script = deal.css('script[type="application/ld+json"]::text').get()
+                if json_ld_script:
+                    try:
+                        import json
+                        json_data = json.loads(json_ld_script)
+                        # Check for url in offers
+                        if 'offers' in json_data and isinstance(json_data['offers'], list) and len(json_data['offers']) > 0:
+                            offer_url = json_data['offers'][0].get('url', '')
+                            if offer_url and '/deals/' in offer_url or '/products/' in offer_url:
+                                link = offer_url
+                        # Also check direct url
+                        if 'lw/click.html' in link and 'url' in json_data:
+                            if '/deals/' in json_data['url'] or '/products/' in json_data['url']:
+                                link = json_data['url']
+                    except:
+                        pass
             item['deallink'] = link or ''
             item['dealtext'] = deal.css('.deal-description::text').get() or deal.css('.deal-summary::text').get() or ''
             item['dealhover'] = deal.css('::attr(title)').get() or ''
@@ -674,16 +753,28 @@ class DealnewsSpider(scrapy.Spider):
                 self.logger.debug(f"Error extracting images: {e}")
                 item['images'] = []
             # Extract related deals from deal container (if available on listing pages)
+            # Note: Related deals are typically only on detail pages, not listing pages
             try:
-                # Try multiple selectors for related/similar deals within deal container
+                # Try specific selectors for related/similar deals (not all deal links)
                 related_links = (
                     deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall() or
                     deal.css('[class*="related"] a::attr(href), [class*="similar"] a::attr(href)').getall() or
-                    deal.css('a[href*="/deals/"]::attr(href), a[href*="/deal/"]::attr(href)').getall()[:3]  # Limit to 3 to avoid duplicates
+                    []
                 )
-                # Filter out the current deal's own link
-                current_link = link or ''
-                item['related_deals'] = [rl for rl in related_links if rl and rl != current_link and rl != item.get('deallink', '')]
+                # Filter out the current deal's own link and make absolute URLs
+                current_link = link or item.get('deallink', '') or ''
+                filtered_links = []
+                for rl in related_links:
+                    if rl and rl.strip() and rl != current_link:
+                        # Make absolute URL
+                        try:
+                            if not rl.startswith('http'):
+                                rl = response.urljoin(rl)
+                            if '/deals/' in rl or '/deal/' in rl:
+                                filtered_links.append(rl)
+                        except:
+                            pass
+                item['related_deals'] = filtered_links
             except Exception:
                 item['related_deals'] = []
             
@@ -745,10 +836,10 @@ class DealnewsSpider(scrapy.Spider):
                 img_url = img_url.strip()
                 if img_url not in seen_images:
                     seen_images.add(img_url)
-                    image_item = DealImageItem()
-                    image_item['dealid'] = item['dealid']
-                    image_item['imageurl'] = img_url
-                    yield image_item
+                image_item = DealImageItem()
+                image_item['dealid'] = item['dealid']
+                image_item['imageurl'] = img_url
+                yield image_item
 
     def extract_deal_categories(self, deal, item, response):
         """Extract ONLY deal-specific categories from within the deal container (NOT page-level)"""
@@ -834,9 +925,13 @@ class DealnewsSpider(scrapy.Spider):
         item = response.meta.get('item', {})
         
         if not dealid:
+            self.logger.warning(f"No dealid found in detail page response: {response.url}")
             return
         
+        self.logger.info(f"🔍 Parsing detail page for deal {dealid}: {response.url}")
+        
         # Extract related deals from detail page (more likely to have them)
+        # Try multiple strategies to find related deals
         related_selectors = [
             '.related-deals a::attr(href)',
             '.related a::attr(href)',
@@ -845,15 +940,38 @@ class DealnewsSpider(scrapy.Spider):
             '[class*="related"] a[href*="/deals/"]::attr(href)',
             '[class*="similar"] a[href*="/deals/"]::attr(href)',
             'section[class*="related"] a::attr(href)',
-            'section[class*="similar"] a::attr(href)'
+            'section[class*="similar"] a::attr(href)',
+            # Also try common DealNews patterns
+            '.recommended-deals a::attr(href)',
+            '.you-may-also-like a::attr(href)',
+            '[data-related] a::attr(href)',
+            'aside a[href*="/deals/"]::attr(href)',  # Sidebar related deals
+            # Try more generic patterns
+            'article a[href*="/deals/"]::attr(href)',
+            '.deal-item a[href*="/deals/"]::attr(href)',
         ]
         
         related_links = []
+        seen_selectors = set()
         for selector in related_selectors:
+            if selector in seen_selectors:
+                continue
+            seen_selectors.add(selector)
             links = response.css(selector).getall()
             if links:
                 related_links.extend(links)
-                break
+                self.logger.info(f"✅ Found {len(links)} related deals using selector: {selector}")
+        
+        # If no specific related deals found, try to find deals in sidebar or recommendations section
+        if not related_links:
+            # Look for deals in common recommendation sections
+            sidebar_deals = response.css('aside a[href*="/deals/"]::attr(href), .sidebar a[href*="/deals/"]::attr(href)').getall()
+            if sidebar_deals:
+                related_links.extend(sidebar_deals[:5])  # Limit to 5 to avoid too many
+                self.logger.info(f"✅ Found {len(sidebar_deals)} deals in sidebar")
+        
+        if not related_links:
+            self.logger.debug(f"⚠️  No related deals found on detail page: {response.url}")
         
         # Yield related deal items
         seen_links = set()

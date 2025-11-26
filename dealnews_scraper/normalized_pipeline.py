@@ -303,7 +303,12 @@ class NormalizedMySQLPipeline:
                 # Decode HTML entities (e.g., &amp; -> &, &nbsp; -> space, &gt; -> >)
                 if category_value:
                     import html
+                    import re
                     category_value = html.unescape(category_value)
+                    # Also replace &nbsp; with space (html.unescape doesn't handle all cases)
+                    category_value = category_value.replace('&nbsp;', ' ').replace('\xa0', ' ')
+                    # Clean up multiple spaces
+                    category_value = re.sub(r'\s+', ' ', category_value).strip()
                     # Truncate to 255 characters to fit VARCHAR(255)
                     category_value = category_value[:255]
                 
@@ -456,6 +461,17 @@ class NormalizedMySQLPipeline:
             category_name = (cat_data.get('category_name', '') or '').strip()
             if not category_name:
                 return  # Skip empty categories
+            
+            # Clean HTML entities from category name
+            import html
+            category_name = html.unescape(category_name)
+            # Also replace &nbsp; with space (html.unescape doesn't handle all cases)
+            category_name = category_name.replace('&nbsp;', ' ').replace('\xa0', ' ')
+            # Clean up multiple spaces
+            import re
+            category_name = re.sub(r'\s+', ' ', category_name).strip()
+            # Truncate to 255 characters
+            category_name = category_name[:255]
             
             category_sql = """
             INSERT INTO deal_categories (dealid, category_id, category_name, category_url, category_title, created_at)
