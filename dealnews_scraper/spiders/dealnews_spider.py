@@ -280,15 +280,132 @@ class DealnewsSpider(scrapy.Spider):
             if isinstance(seller, dict):
                 item['store'] = seller.get('name', '')
             
-            # Set default values for missing fields
+            # Extract deal text from title/description (look for "Up to X% off" patterns)
+            deal_text = ''
+            title_text = item.get('title', '')
+            detail_text = item.get('detail', '')
+            combined_text = f"{title_text} {detail_text}".lower()
+            
+            # Look for discount patterns in title or description
+            import re
+            # Pattern 1: Standard discount patterns
+            deal_patterns = [
+                r'Up to \d+% off',
+                r'Up to \d+%',
+                r'Save \d+%',
+                r'\d+% off',
+                r'\$\d+ off',
+                r'\$\d+ gift card',
+                r'\d+-\w+ deals?',  # e.g., "1-cent deals"
+                r'\$\d+/\w+',  # e.g., "$5/item"
+            ]
+            
+            # Try title first
+            for pattern in deal_patterns:
+                deal_match = re.search(pattern, title_text, re.IGNORECASE)
+                if deal_match:
+                    deal_text = deal_match.group(0)
+                    break
+            
+            # If not found in title, try description
+            if not deal_text:
+                for pattern in deal_patterns:
+                    deal_match = re.search(pattern, detail_text, re.IGNORECASE)
+                    if deal_match:
+                        deal_text = deal_match.group(0)
+                        break
+            
+            # Special case: "1-cent" deals
+            if not deal_text and ('1-cent' in title_text.lower() or '1 cent' in title_text.lower()):
+                deal_text = '1-cent deals'
+            
+            # Special case: Gift card deals
+            if not deal_text and ('gift card' in combined_text):
+                gift_match = re.search(r'\$?\d+ gift card', title_text, re.IGNORECASE)
+                if gift_match:
+                    deal_text = gift_match.group(0)
+            
+            # Extract dealplus (free shipping, Prime, etc.)
+            dealplus_text = ''
+            # Check for free shipping patterns
+            if 'free shipping' in combined_text:
+                if 'prime' in combined_text or 'w/ prime' in combined_text or 'w/Prime' in combined_text:
+                    dealplus_text = 'free shipping w/ Prime'
+                elif 'w/ $' in combined_text or 'w/$' in combined_text:
+                    # Extract minimum amount (e.g., "free shipping w/ $25")
+                    amount_match = re.search(r'free shipping\s+w/?\s*\$?(\d+)', combined_text, re.IGNORECASE)
+                    if amount_match:
+                        dealplus_text = f"free shipping w/ ${amount_match.group(1)}"
+                    else:
+                        dealplus_text = 'free shipping'
+                else:
+                    dealplus_text = 'free shipping'
+            elif ('prime' in combined_text and ('w/' in combined_text or 'w/ ' in combined_text)):
+                dealplus_text = 'free shipping w/ Prime'
+            elif 'w/ $' in combined_text or 'w/$' in combined_text:
+                # Check for other shipping conditions
+                amount_match = re.search(r'w/?\s*\$?(\d+)', combined_text, re.IGNORECASE)
+                if amount_match:
+                    dealplus_text = f"free shipping w/ ${amount_match.group(1)}"
+            
+            # Extract published timestamp from availabilityStarts
+            published_text = ''
+            if availability_starts:
+                # Format: "2025-11-28T04:51:31-05:00" -> try to make it readable
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(availability_starts.replace('Z', '+00:00'))
+                    # Calculate time ago
+                    now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+                    diff = now - dt
+                    hours = int(diff.total_seconds() / 3600)
+                    if hours < 1:
+                        published_text = f"{item.get('store', '')} · just now"
+                    elif hours < 24:
+                        published_text = f"{item.get('store', '')} · {hours} hr{'s' if hours > 1 else ''} ago"
+                    else:
+                        days = hours // 24
+                        published_text = f"{item.get('store', '')} · {days} day{'s' if days > 1 else ''} ago"
+                except:
+                    published_text = availability_starts
+            
+            # Extract popularity (check title, description, and JSON-LD name field)
+            popularity_text = ''
+            # Check in title first (sometimes it's in the title)
+            if '/5' in title_text or 'popularity' in title_text.lower():
+                pop_match = re.search(r'(Popularity:?\s*\d+/\d+|\d+/\d+)', title_text, re.IGNORECASE)
+                if pop_match:
+                    popularity_text = pop_match.group(1)
+            
+            # Check in description
+            if not popularity_text and ('/5' in detail_text or 'popularity' in detail_text.lower()):
+                pop_match = re.search(r'(Popularity:?\s*\d+/\d+|\d+/\d+)', detail_text, re.IGNORECASE)
+                if pop_match:
+                    popularity_text = pop_match.group(1)
+            
+            # Also check JSON-LD name field (sometimes popularity is in the name)
+            json_name = deal_data.get('name', '')
+            if not popularity_text and json_name and ('/5' in json_name or 'popularity' in json_name.lower()):
+                pop_match = re.search(r'(Popularity:?\s*\d+/\d+|\d+/\d+)', json_name, re.IGNORECASE)
+                if pop_match:
+                    popularity_text = pop_match.group(1)
+            
+            # Extract staffpick (check description for "Staff Pick" or similar)
+            staffpick_text = ''
+            if 'staff pick' in combined_text or 'bought one' in combined_text:
+                staffpick_text = 'Staff Pick'
+            
+            # Set fields
             item['recid'] = ''
-            item['deal'] = ''
-            item['dealplus'] = ''
+            item['deal'] = deal_text
+            item['dealplus'] = dealplus_text
             item['promo'] = ''
             item['deallink'] = item['url']
-            item['dealtext'] = item['detail']
-            item['dealhover'] = ''
-            item['staffpick'] = ''
+            item['dealtext'] = item['detail'][:200] if item['detail'] else ''  # First 200 chars of detail
+            item['dealhover'] = item['title']  # Use title as hover text
+            item['staffpick'] = staffpick_text
+            item['published'] = published_text
+            item['popularity'] = popularity_text
             item['start_date'] = availability_starts
             item['raw_html'] = f'<div class="json-ld-deal">{json.dumps(deal_data)}</div>'
             
@@ -628,8 +745,8 @@ class DealnewsSpider(scrapy.Spider):
                     if store and store.strip():
                         store = store.strip()
                         break
-            
-            item['store'] = store or ''
+                
+                item['store'] = store or ''
             
             # Extract category from deal element - try JSON-LD first, then data attributes, then CSS
             category_value = ''
@@ -699,10 +816,103 @@ class DealnewsSpider(scrapy.Spider):
                 })
             item['categories'] = deal_categories if deal_categories else []
             
-            # Deal text and other fields
-            item['deal'] = deal.css('.deal-text::text').get() or deal.css('.deal-description::text').get() or ''
-            item['dealplus'] = deal.css('.deal-plus::text').get() or ''
+            # IMPROVED Deal text extraction - look for patterns like "Up to 80% off"
+            deal_text = ''
+            # First, try to find text containing discount patterns
+            all_text = deal.css('::text').getall()
+            import re
+            for text in all_text:
+                if text and text.strip():
+                    text_lower = text.lower().strip()
+                    # Look for discount patterns: "Up to X% off", "X% off", "Save X%", etc.
+                    # Use regex for more precise matching
+                    deal_patterns = [
+                        r'Up to \d+% off',
+                        r'Up to \d+%',
+                        r'Save \d+%',
+                        r'\d+% off',
+                        r'\$\d+ off',
+                        r'\d+-\w+ deals?',  # e.g., "1-cent deals"
+                    ]
+                    for pattern in deal_patterns:
+                        match = re.search(pattern, text, re.IGNORECASE)
+                        if match:
+                            deal_text = match.group(0).strip()
+                            # Prefer shorter, more specific deal text
+                            if len(deal_text) < 50:
+                                break
+                    if deal_text:
+                        break
+            
+            # Fallback to CSS selectors
+            if not deal_text:
+                deal_text_selectors = [
+                    '.deal-text::text',
+                    '.deal-description::text',
+                    '.discount::text',
+                    '.savings::text',
+                    '[class*="deal"]::text',
+                    '[class*="discount"]::text',
+                    '.promo-text::text',
+                    '.offer-text::text'
+                ]
+                for selector in deal_text_selectors:
+                    deal_text = deal.css(selector).get()
+                    if deal_text and deal_text.strip():
+                        deal_text = deal_text.strip()
+                        # Validate it looks like a deal text
+                        if '%' in deal_text or 'off' in deal_text.lower() or 'save' in deal_text.lower():
+                            break
+            item['deal'] = deal_text or ''
+            
+            # IMPROVED Dealplus extraction - look for "free shipping", "w/ Prime", etc.
+            dealplus_text = ''
+            import re
+            # Check for free shipping patterns with amounts
+            for text in all_text:
+                if text and text.strip():
+                    text_lower = text.lower().strip()
+                    # Pattern 1: "free shipping w/ $25" or "free shipping w/$25"
+                    if 'free shipping' in text_lower:
+                        amount_match = re.search(r'free shipping\s+w/?\s*\$?(\d+)', text_lower)
+                        if amount_match:
+                            dealplus_text = f"free shipping w/ ${amount_match.group(1)}"
+                            break
+                        elif 'prime' in text_lower or 'w/ prime' in text_lower:
+                            dealplus_text = 'free shipping w/ Prime'
+                            break
+                        else:
+                            dealplus_text = 'free shipping'
+                            break
+                    # Pattern 2: "w/ Prime" or "w/Prime" (separate if, not elif)
+                    if not dealplus_text and 'prime' in text_lower and ('w/' in text_lower or 'w/ ' in text_lower):
+                        dealplus_text = 'free shipping w/ Prime'
+                        break
+            
+            # Fallback to CSS selectors
+            if not dealplus_text:
+                dealplus_selectors = [
+                    '.deal-plus::text',
+                    '.shipping::text',
+                    '.bonus::text',
+                    '[class*="plus"]::text',
+                    '[class*="shipping"]::text'
+                ]
+                for selector in dealplus_selectors:
+                    dealplus_text = deal.css(selector).get()
+                    if dealplus_text and dealplus_text.strip():
+                        dealplus_text = dealplus_text.strip()
+                        # Clean up the text
+                        if 'free shipping' in dealplus_text.lower():
+                            if 'prime' in dealplus_text.lower():
+                                dealplus_text = 'free shipping w/ Prime'
+                            else:
+                                dealplus_text = 'free shipping'
+                        break
+            item['dealplus'] = dealplus_text or ''
+            
             item['promo'] = deal.css('.promo::text').get() or deal.css('.promotion::text').get() or ''
+            
             # Use the absolute deal link if available (prefer actual deal URL over click.html redirect)
             # If link is a click.html redirect, try to get the actual deal URL from JSON-LD or data-offer-url
             if link and 'lw/click.html' in link:
@@ -724,12 +934,105 @@ class DealnewsSpider(scrapy.Spider):
                     except:
                         pass
             item['deallink'] = link or ''
-            item['dealtext'] = deal.css('.deal-description::text').get() or deal.css('.deal-summary::text').get() or ''
-            item['dealhover'] = deal.css('::attr(title)').get() or ''
-            item['published'] = deal.css('.published::text').get() or deal.css('.date::text').get() or ''
-            item['popularity'] = deal.css('.popularity::text').get() or deal.css('.rating::text').get() or ''
-            item['staffpick'] = deal.css('.staff-pick::text').get() or deal.css('.featured::text').get() or ''
-            item['detail'] = deal.css('.deal-detail::text').get() or deal.css('.details::text').get() or ''
+            
+            # IMPROVED Dealtext and dealhover - extract from "Shop Now" button/link using XPath
+            shop_now_link = deal.xpath('.//a[contains(text(), "Shop Now") or contains(text(), "Buy Now")]/@href').get()
+            shop_now_text = deal.xpath('.//a[contains(text(), "Shop Now") or contains(text(), "Buy Now")]/text()').get()
+            shop_now_title = deal.xpath('.//a[contains(text(), "Shop Now") or contains(text(), "Buy Now")]/@title').get()
+            
+            if shop_now_link:
+                item['deallink'] = response.urljoin(shop_now_link) if shop_now_link else item['deallink']
+            item['dealtext'] = shop_now_text or deal.css('.deal-description::text').get() or deal.css('.deal-summary::text').get() or ''
+            item['dealhover'] = shop_now_title or deal.css('::attr(title)').get() or ''
+            
+            # IMPROVED Published timestamp - look for "Published X hr ago", "X hrs ago", etc.
+            published_text = ''
+            for text in all_text:
+                if text and ('ago' in text.lower() or ('published' in text.lower() and 'hr' in text.lower())):
+                    published_text = text.strip()
+                    break
+            
+            # Fallback to CSS selectors
+            if not published_text:
+                published_selectors = [
+                    '.published::text',
+                    '.date::text',
+                    '.timestamp::text',
+                    '.time::text',
+                    '[class*="published"]::text',
+                    '[class*="date"]::text'
+                ]
+                for selector in published_selectors:
+                    published_text = deal.css(selector).get()
+                    if published_text and published_text.strip():
+                        published_text = published_text.strip()
+                        break
+            item['published'] = published_text or ''
+            
+            # IMPROVED Popularity - look for "5/5", "Popularity: 5/5", etc.
+            popularity_text = ''
+            # First check all text for popularity patterns
+            for text in all_text:
+                if text and text.strip():
+                    # Look for patterns like "5/5", "Popularity: 5/5", "Rating: 4/5"
+                    pop_match = re.search(r'(Popularity:?\s*)?(\d+/\d+)', text, re.IGNORECASE)
+                    if pop_match:
+                        popularity_text = pop_match.group(2)  # Just the "5/5" part
+                        break
+            
+            # Fallback to CSS selectors
+            if not popularity_text:
+                popularity_selectors = [
+                    '.popularity::text',
+                    '.rating::text',
+                    '.score::text',
+                    '[class*="popularity"]::text',
+                    '[class*="rating"]::text',
+                    '[data-popularity]::attr(data-popularity)',
+                    '[data-rating]::attr(data-rating)'
+                ]
+                for selector in popularity_selectors:
+                    pop_val = deal.css(selector).get()
+                    if pop_val and pop_val.strip():
+                        # Extract just the rating part (e.g., "5/5" from "Popularity: 5/5")
+                        pop_match = re.search(r'(\d+/\d+)', pop_val)
+                        if pop_match:
+                            popularity_text = pop_match.group(1)
+                        else:
+                            popularity_text = pop_val.strip()
+                        break
+            item['popularity'] = popularity_text or ''
+            
+            # IMPROVED Staffpick - look for "Staff Pick", "Deals so good we bought one", etc.
+            staffpick_text = ''
+            for text in all_text:
+                if text and ('staff pick' in text.lower() or 'bought one' in text.lower()):
+                    staffpick_text = text.strip()
+                    break
+            
+            # Fallback to CSS selectors
+            if not staffpick_text:
+                staffpick_selectors = [
+                    '.staff-pick::text',
+                    '.featured::text',
+                    '[class*="staff"]::text',
+                    '[class*="pick"]::text'
+                ]
+                for selector in staffpick_selectors:
+                    staffpick_text = deal.css(selector).get()
+                    if staffpick_text and staffpick_text.strip():
+                        staffpick_text = staffpick_text.strip()
+                        break
+            item['staffpick'] = staffpick_text or ''
+            
+            # IMPROVED Detail - full description text
+            detail_text = deal.css('.deal-detail::text').get() or deal.css('.details::text').get() or deal.css('.description::text').get() or ''
+            # Also try to get full paragraph text
+            if not detail_text:
+                detail_paragraphs = deal.css('p::text').getall()
+                if detail_paragraphs:
+                    detail_text = ' '.join([p.strip() for p in detail_paragraphs if p.strip()])
+            item['detail'] = detail_text or ''
             item['raw_html'] = deal.get()
             
             # Extract filter variables from deal content
@@ -859,25 +1162,39 @@ class DealnewsSpider(scrapy.Spider):
         # Extract deal-specific category from deal container only (scoped to this deal)
         deal_category = deal.css('.category::text, .deal-category::text, .category-name::text').get()
         if deal_category and deal_category.strip():
-            category_item = DealCategoryItem()
-            category_item['dealid'] = item['dealid']
-            category_item['category_name'] = deal_category.strip()
-            yield category_item
+            deal_category = deal_category.strip()
+            # Filter out invalid categories
+            invalid_categories = ['sponsored', 'expired', 'active', 'inactive', 'new', 'used', 'refurbished']
+            if deal_category.lower() not in invalid_categories:
+                category_item = DealCategoryItem()
+                category_item['dealid'] = item['dealid']
+                category_item['category_name'] = deal_category
+                yield category_item
         
         # Extract deal-specific tags/labels within deal container only
         # Use scoped selectors to avoid page-level elements
         deal_tags = deal.css('.tag::text, .label::text, [class*="deal-tag"]::text, [class*="deal-label"]::text').getall()
         seen_tags = set()
+        # Invalid category names to filter out (not real categories)
+        invalid_categories = [
+            'sponsored', 'expired', 'active', 'inactive', 'new', 'used', 'refurbished',
+            'deal', 'sale', 'offer', 'buy', 'shop', 'more', 'less', 'read more',
+            'staff pick', 'popular', 'featured', 'hot', 'trending', 'best seller',
+            'limited time', 'ending soon', 'expires', 'ended', 'no longer available'
+        ]
         for tag_text in deal_tags:
             tag_text = tag_text.strip() if tag_text else ''
-            # Skip generic/static tags that appear on every deal
-            if tag_text and len(tag_text) > 1 and tag_text.lower() not in ['deal', 'sale', 'offer', 'buy', 'shop']:
+            # Skip generic/static tags and invalid category names
+            if (tag_text and len(tag_text) > 1 and 
+                tag_text.lower() not in invalid_categories and
+                not tag_text.lower().startswith('popularity') and
+                not tag_text.lower().startswith('published')):
                 if tag_text not in seen_tags:
                     seen_tags.add(tag_text)
-                    category_item = DealCategoryItem()
-                    category_item['dealid'] = item['dealid']
-                    category_item['category_name'] = tag_text
-                    yield category_item
+                category_item = DealCategoryItem()
+                category_item['dealid'] = item['dealid']
+                category_item['category_name'] = tag_text
+                yield category_item
 
     def extract_related_deals(self, deal, item, response):
         """Extract related deals from deal container (dynamic, deal-specific only)"""

@@ -56,6 +56,7 @@ class NormalizedMySQLPipeline:
                 return
 
             # If connection test passed, create main connection
+            # Note: pool_reset_session can cause database to be deselected, so we'll select it explicitly
             self.conn = mysql.connector.connect(
                 host=mysql_host,
                 port=mysql_port,
@@ -64,13 +65,12 @@ class NormalizedMySQLPipeline:
                 database=mysql_database,
                 use_pure=True,
                 connection_timeout=60,
-                autocommit=True,
-                pool_name='dealnews_pool',
-                pool_size=5,
-                pool_reset_session=True
+                autocommit=True
             )
             
             self.cursor = self.conn.cursor()
+            # Explicitly select database to ensure it's set
+            self.cursor.execute(f"USE {mysql_database}")
             spider.logger.info("✅ Normalized MySQL connection successful")
             
             # Create all tables
@@ -312,6 +312,19 @@ class NormalizedMySQLPipeline:
                     # Truncate to 255 characters to fit VARCHAR(255)
                     category_value = category_value[:255]
                 
+                # Validate and clean deal field - prevent JSON data from being saved
+                deal_value = item.get('deal', '') or ''
+                # Check if deal field contains JSON (should not happen)
+                if deal_value and ('@context' in deal_value or 'schema.org' in deal_value or deal_value.strip().startswith('{')):
+                    spider.logger.warning(f"⚠️ Deal field contains JSON for deal {dealid}, clearing it")
+                    deal_value = ''  # Clear invalid JSON data
+                
+                # Validate dealplus field
+                dealplus_value = item.get('dealplus', '') or ''
+                if dealplus_value and ('@context' in dealplus_value or 'schema.org' in dealplus_value):
+                    spider.logger.warning(f"⚠️ Dealplus field contains JSON for deal {dealid}, clearing it")
+                    dealplus_value = ''
+                
                 deal_values = (
                     dealid,
                     item.get('recid', '') or '',
@@ -321,8 +334,8 @@ class NormalizedMySQLPipeline:
                     item.get('promo', '') or '',
                     category_value,
                     item.get('store', '') or '',
-                    item.get('deal', '') or '',
-                    item.get('dealplus', '') or '',
+                    deal_value,  # Use cleaned deal value
+                    dealplus_value,  # Use cleaned dealplus value
                     item.get('deallink', '') or url,
                     item.get('dealtext', '') or item.get('detail', '') or '',
                     item.get('dealhover', '') or '',
@@ -382,10 +395,28 @@ class NormalizedMySQLPipeline:
                 if attempt < max_retries - 1:
                     time.sleep(2)
                     try:
+                        # Reconnect with database selection
+                        mysql_database = os.getenv('MYSQL_DATABASE', 'dealnews')
                         self.conn.reconnect()
                         self.cursor = self.conn.cursor()
-                    except:
-                        pass
+                        # Explicitly select database after reconnect
+                        self.cursor.execute(f"USE {mysql_database}")
+                    except Exception as reconnect_err:
+                        spider.logger.error(f"❌ Reconnection failed: {reconnect_err}")
+                        # Create new connection if reconnect fails
+                        mysql_host = os.getenv('MYSQL_HOST', 'localhost')
+                        mysql_port = int(os.getenv('MYSQL_PORT', '3306'))
+                        mysql_user = os.getenv('MYSQL_USER', 'root')
+                        mysql_password = os.getenv('MYSQL_PASSWORD', 'root')
+                        self.conn = mysql.connector.connect(
+                            host=mysql_host,
+                            port=mysql_port,
+                            user=mysql_user,
+                            password=mysql_password,
+                            database=mysql_database,
+                            autocommit=True
+                        )
+                        self.cursor = self.conn.cursor()
                 else:
                     spider.logger.error(f"❌ Failed to save deal after {max_retries} attempts")
             except Exception as e:
@@ -461,6 +492,17 @@ class NormalizedMySQLPipeline:
             category_name = (cat_data.get('category_name', '') or '').strip()
             if not category_name:
                 return  # Skip empty categories
+            
+            # Filter out invalid category names (not real categories)
+            invalid_categories = [
+                'sponsored', 'expired', 'active', 'inactive', 'new', 'used', 'refurbished',
+                'deal', 'sale', 'offer', 'buy', 'shop', 'more', 'less', 'read more',
+                'staff pick', 'popular', 'featured', 'hot', 'trending', 'best seller',
+                'limited time', 'ending soon', 'expires', 'ended', 'no longer available'
+            ]
+            if category_name.lower() in invalid_categories:
+                spider.logger.debug(f"⏭️ Skipping invalid category '{category_name}' for deal {dealid}")
+                return
             
             # Clean HTML entities from category name
             import html
