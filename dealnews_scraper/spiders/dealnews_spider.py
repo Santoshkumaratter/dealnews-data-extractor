@@ -17,14 +17,17 @@ class DealnewsSpider(scrapy.Spider):
         self.max_deals = 100000  # Target: 100,000+ deals
         self.detail_pages_visited = 0
         self.max_detail_pages = 5000  # Increased limit to get more related deals (was 1000)
+        self.discovered_categories = set()  # Track discovered category pages
+        self.discovered_stores = set()  # Track discovered store pages
+        self.category_discovery_enabled = True  # Enable category discovery for 100k+ deals
     
-    # Optimized start URLs - pagination will automatically handle 100k+ deals
+    # Optimized start URLs - pagination + category discovery will handle 100k+ deals
     start_urls = [
         "https://www.dealnews.com/",
         "https://www.dealnews.com/?e=1",  # All deals
         "https://www.dealnews.com/?pf=1",  # Staff picks
         "https://www.dealnews.com/online-stores/",
-        # Main category pages - pagination will crawl deep
+        # Main category pages - category discovery will find all subcategories automatically
         "https://www.dealnews.com/c142/Electronics/",
         "https://www.dealnews.com/c39/Computers/",
         "https://www.dealnews.com/c196/Home-Garden/",
@@ -33,10 +36,29 @@ class DealnewsSpider(scrapy.Spider):
         "https://www.dealnews.com/c298/Sports-Fitness/",
         "https://www.dealnews.com/c765/Health-Beauty/",
         "https://www.dealnews.com/c206/Travel-Entertainment/",
+        # Additional major categories for faster initial coverage
+        "https://www.dealnews.com/c203/Clothing-Accessories/Mens-Clothing/",
+        "https://www.dealnews.com/c204/Clothing-Accessories/Womens-Clothing/",
+        "https://www.dealnews.com/c143/Electronics/Audio/",
+        "https://www.dealnews.com/c144/Electronics/Cell-Phones/",
+        "https://www.dealnews.com/c145/Electronics/Cameras/",
+        "https://www.dealnews.com/c40/Computers/Laptops/",
+        "https://www.dealnews.com/c41/Computers/Tablets/",
     ]
 
     def start_requests(self):
-        """Start requests with proper error handling"""
+        """Start requests with proper error handling - optimized for 100k+ deals"""
+        # First, try to discover categories from sitemap or main navigation
+        # This helps us find all categories upfront for 100k+ deals
+        yield scrapy.Request(
+            url="https://www.dealnews.com/sitemap/",
+            callback=self.parse_sitemap,
+            errback=self.errback_http,
+            meta={'dont_cache': True},
+            dont_filter=True
+        )
+        
+        # Also start with regular start URLs
         for url in self.start_urls:
             yield scrapy.Request(
                 url=url,
@@ -44,6 +66,50 @@ class DealnewsSpider(scrapy.Spider):
                 errback=self.errback_http,
                 meta={'dont_cache': True}
             )
+    
+    def parse_sitemap(self, response):
+        """Parse sitemap to discover all category pages upfront for 100k+ deals"""
+        if response.status != 200:
+            self.logger.warning(f"Sitemap not available: {response.url} - continuing with regular discovery")
+            return
+        
+        self.logger.info("🗺️  Parsing sitemap to discover all categories...")
+        
+        # Extract category links from sitemap
+        category_links = response.css('a[href*="/c"]::attr(href)').getall()
+        discovered = 0
+        
+        for link in category_links:
+            if not link:
+                continue
+            
+            # Convert to absolute URL
+            if link.startswith('/'):
+                full_url = urljoin('https://www.dealnews.com', link)
+            elif 'dealnews.com' in link:
+                full_url = link
+            else:
+                continue
+            
+            # Check if it's a category URL
+            if re.search(r'/c\d+/', full_url) and self.is_valid_dealnews_url(full_url):
+                normalized = re.sub(r'\?.*$', '', full_url.rstrip('/'))
+                
+                if normalized not in self.discovered_categories:
+                    self.discovered_categories.add(normalized)
+                    self.logger.info(f"  ✅ Found category in sitemap: {normalized}")
+                    yield scrapy.Request(
+                        url=normalized,
+                        callback=self.parse,
+                        errback=self.errback_http,
+                        dont_filter=False
+                    )
+                    discovered += 1
+        
+        self.logger.info(f"📊 Discovered {discovered} categories from sitemap (Total: {len(self.discovered_categories)})")
+        
+        # Also parse the sitemap page itself for deals if it has any
+        yield from self.parse(response)
 
     def errback_http(self, failure):
         """Handle HTTP errors"""
@@ -185,6 +251,15 @@ class DealnewsSpider(scrapy.Spider):
                             dont_filter=True
                         )
                         self.detail_pages_visited += 1
+        
+        # Discover category and store pages for comprehensive crawling (100k+ deals)
+        # Always discover categories (even if we're close to max) to ensure we get all paths
+        if self.category_discovery_enabled:
+            # Discover categories more aggressively to reach 100k+ deals
+            if len(self.discovered_categories) < 500:  # Keep discovering until we have 500+ categories
+                yield from self.discover_category_pages(response)
+            if len(self.discovered_stores) < 200:  # Discover stores too
+                yield from self.discover_store_pages(response)
         
         # Handle pagination
         if len(unique_deals) == 0 and 'start=' in response.url:
@@ -634,8 +709,8 @@ class DealnewsSpider(scrapy.Spider):
                 if title and title.strip() and len(title.strip()) > 5:
                     # Skip common non-title text
                     if title.strip().lower() not in ['more options', 'more', 'less', 'buy now', 'shop now', 'read more']:
-                        item['title'] = title.strip()
-                        break
+                    item['title'] = title.strip()
+                    break
             else:
                 # Fallbacks: aria-label/title attributes or nearby snippet text
                 attr_title = deal.css('[aria-label*="details"], [aria-label*="Read More"]::attr(aria-label)').get()
@@ -720,31 +795,31 @@ class DealnewsSpider(scrapy.Spider):
             
             # Fallback to CSS selectors
             if not store:
-                store_selectors = [
-                    # DealNews specific
-                    '.store::text',
-                    '.merchant::text',
-                    '.retailer::text',
-                    '.vendor::text',
-                    '.deal-store::text',
-                    '.deal-merchant::text',
-                    # Generic
-                    '.store-name::text',
-                    '.merchant-name::text',
-                    '.retailer-name::text',
-                    '.vendor-name::text',
-                    # With spans
-                    'span[class*="store"]::text',
-                    'span[class*="merchant"]::text',
-                    'span[class*="retailer"]::text',
-                    'span[class*="vendor"]::text'
-                ]
-                
-                for selector in store_selectors:
-                    store = deal.css(selector).get()
-                    if store and store.strip():
+            store_selectors = [
+                # DealNews specific
+                '.store::text',
+                '.merchant::text',
+                '.retailer::text',
+                '.vendor::text',
+                '.deal-store::text',
+                '.deal-merchant::text',
+                # Generic
+                '.store-name::text',
+                '.merchant-name::text',
+                '.retailer-name::text',
+                '.vendor-name::text',
+                # With spans
+                'span[class*="store"]::text',
+                'span[class*="merchant"]::text',
+                'span[class*="retailer"]::text',
+                'span[class*="vendor"]::text'
+            ]
+            
+            for selector in store_selectors:
+                store = deal.css(selector).get()
+                if store and store.strip():
                         store = store.strip()
-                        break
+                    break
                 
                 item['store'] = store or ''
             
@@ -771,18 +846,18 @@ class DealnewsSpider(scrapy.Spider):
             
             # Fallback to CSS selectors
             if not category_value:
-                category_selectors = [
-                    '.category::text',
-                    '.deal-category::text',
-                    '.breadcrumb::text',
-                    '.deal-breadcrumb::text',
-                    '.category-name::text',
-                    '.cat::text',
-                    '.section::text',
-                    '.department::text'
-                ]
-                
-                for selector in category_selectors:
+            category_selectors = [
+                '.category::text',
+                '.deal-category::text',
+                '.breadcrumb::text',
+                '.deal-breadcrumb::text',
+                '.category-name::text',
+                '.cat::text',
+                '.section::text',
+                '.department::text'
+            ]
+            
+            for selector in category_selectors:
                     category = deal.css(selector).get()
                     if category and category.strip():
                         category_value = category.strip()
@@ -881,7 +956,7 @@ class DealnewsSpider(scrapy.Spider):
                         elif 'prime' in text_lower or 'w/ prime' in text_lower:
                             dealplus_text = 'free shipping w/ Prime'
                             break
-                        else:
+            else:
                             dealplus_text = 'free shipping'
                             break
                     # Pattern 2: "w/ Prime" or "w/Prime" (separate if, not elif)
@@ -1149,15 +1224,15 @@ class DealnewsSpider(scrapy.Spider):
         # Extract category from URL (dynamic per page, but unique per deal's page context)
         url_category = self.extract_category_from_url(response.url)
         if url_category:
-            category_item = DealCategoryItem()
-            category_item['dealid'] = item['dealid']
+                category_item = DealCategoryItem()
+                category_item['dealid'] = item['dealid']
             category_item['category_name'] = url_category
             category_item['category_url'] = response.url
-            # Extract category ID from URL if present (e.g., /c142/Electronics/)
+                    # Extract category ID from URL if present (e.g., /c142/Electronics/)
             match = re.search(r'/c(\d+)/', response.url)
-            if match:
-                category_item['category_id'] = match.group(1)
-            yield category_item
+                    if match:
+                        category_item['category_id'] = match.group(1)
+                yield category_item
         
         # Extract deal-specific category from deal container only (scoped to this deal)
         deal_category = deal.css('.category::text, .deal-category::text, .category-name::text').get()
@@ -1505,6 +1580,166 @@ class DealnewsSpider(scrapy.Spider):
                 return False
         
         return True
+
+    def discover_category_pages(self, response):
+        """Discover and crawl category pages to reach 100k+ deals"""
+        if self.deals_extracted >= self.max_deals:
+            return
+        
+        # Discover categories from all pages (including category pages for subcategories)
+        # Only skip pagination pages to avoid duplicate discovery
+        if 'start=' in response.url and '?start=' in response.url:
+            # Allow discovery from category pages even with start=0 (first page)
+            if not response.url.endswith('?start=0') and '?start=0&' not in response.url:
+                return
+        
+        self.logger.info(f"🔍 Discovering category pages from: {response.url}")
+        
+        # Find category links - DealNews uses /c{id}/CategoryName/ pattern
+        # More comprehensive patterns to find ALL categories
+        category_patterns = [
+            'a[href*="/c"][href*="/"]',  # Category links like /c142/Electronics/
+            'a[href^="/c"]',  # Category links starting with /c
+            'a[href*="/c"][href*="/"]::attr(href)',  # Explicit href extraction
+            '.category a::attr(href)',
+            '.categories a::attr(href)',
+            'nav a[href*="/c"]::attr(href)',
+            '.menu a[href*="/c"]::attr(href)',
+            '.sidebar a[href*="/c"]::attr(href)',
+            '.navigation a[href*="/c"]::attr(href)',
+            '.footer a[href*="/c"]::attr(href)',
+            '.breadcrumb a[href*="/c"]::attr(href)',
+            '[class*="category"] a[href*="/c"]::attr(href)',
+            '[class*="nav"] a[href*="/c"]::attr(href)',
+            'ul a[href*="/c"]::attr(href)',
+            'li a[href*="/c"]::attr(href)',
+        ]
+        
+        discovered_count = 0
+        all_links = set()  # Track all found links to avoid duplicates
+        
+        for pattern in category_patterns:
+            links = response.css(pattern).getall()
+            for link in links[:200]:  # Increased limit for comprehensive discovery
+                if not link:
+                    continue
+                
+                # Convert to absolute URL
+                if link.startswith('/'):
+                    full_url = urljoin('https://www.dealnews.com', link)
+                elif 'dealnews.com' in link:
+                    full_url = link
+                else:
+                    continue
+                
+                # Skip if already processed
+                if full_url in all_links:
+                    continue
+                all_links.add(full_url)
+                
+                # Check if it's a category URL (pattern: /c{id}/CategoryName/ or subcategory)
+                if re.search(r'/c\d+/', full_url) and self.is_valid_dealnews_url(full_url):
+                    # Normalize URL (remove trailing slash, query params for discovery)
+                    normalized = re.sub(r'\?.*$', '', full_url.rstrip('/'))
+                    
+                    # Also discover subcategories (e.g., /c142/Electronics/Audio/)
+                    # This helps reach 100k+ deals by crawling all subcategory pages
+                    if normalized not in self.discovered_categories:
+                        self.discovered_categories.add(normalized)
+                        self.logger.info(f"  ✅ Discovered new category: {normalized}")
+                        yield scrapy.Request(
+                            url=normalized,
+                            callback=self.parse,
+                            errback=self.errback_http,
+                            dont_filter=False
+                        )
+                        discovered_count += 1
+                        
+                        # Increased limit per page for better coverage (100k+ deals target)
+                        if discovered_count >= 100:  # Increased from 30 to 100
+                            break
+            
+            if discovered_count >= 100:  # Increased from 20 to 100
+                break
+        
+        if discovered_count > 0:
+            self.logger.info(f"📊 Discovered {discovered_count} new category pages (Total discovered: {len(self.discovered_categories)})")
+
+    def discover_store_pages(self, response):
+        """Discover and crawl store pages to reach 100k+ deals"""
+        if self.deals_extracted >= self.max_deals:
+            return
+        
+        # Discover stores from all pages (not just main pages)
+        # Only skip pagination pages to avoid duplicate discovery
+        if 'start=' in response.url and '?start=' in response.url:
+            if not response.url.endswith('?start=0') and '?start=0&' not in response.url:
+                return
+        
+        self.logger.info(f"🔍 Discovering store pages from: {response.url}")
+        
+        # Find store links - DealNews uses /stores/StoreName/ or /online-stores/ pattern
+        # More comprehensive patterns
+        store_patterns = [
+            'a[href*="/stores/"]',
+            'a[href*="/online-stores/"]',
+            'a[href*="/store/"]',
+            '.store a::attr(href)',
+            '.stores a::attr(href)',
+            'nav a[href*="/stores/"]::attr(href)',
+            '.menu a[href*="/stores/"]::attr(href)',
+            '.sidebar a[href*="/stores/"]::attr(href)',
+            '.footer a[href*="/stores/"]::attr(href)',
+            '[class*="store"] a[href*="/stores/"]::attr(href)',
+        ]
+        
+        discovered_count = 0
+        all_links = set()  # Track all found links to avoid duplicates
+        
+        for pattern in store_patterns:
+            links = response.css(pattern).getall()
+            for link in links[:100]:  # Increased limit
+                if not link:
+                    continue
+                
+                # Convert to absolute URL
+                if link.startswith('/'):
+                    full_url = urljoin('https://www.dealnews.com', link)
+                elif 'dealnews.com' in link:
+                    full_url = link
+                else:
+                    continue
+                
+                # Skip if already processed
+                if full_url in all_links:
+                    continue
+                all_links.add(full_url)
+                
+                # Check if it's a store URL
+                if ('/stores/' in full_url or '/online-stores/' in full_url or '/store/' in full_url) and self.is_valid_dealnews_url(full_url):
+                    # Normalize URL
+                    normalized = re.sub(r'\?.*$', '', full_url.rstrip('/'))
+                    
+                    if normalized not in self.discovered_stores:
+                        self.discovered_stores.add(normalized)
+                        self.logger.info(f"  ✅ Discovered new store: {normalized}")
+                        yield scrapy.Request(
+                            url=normalized,
+                            callback=self.parse,
+                            errback=self.errback_http,
+                            dont_filter=False
+                        )
+                        discovered_count += 1
+                        
+                        # Increased limit for better coverage
+                        if discovered_count >= 50:  # Increased from 10 to 50
+                            break
+            
+            if discovered_count >= 50:  # Increased from 10 to 50
+                break
+        
+        if discovered_count > 0:
+            self.logger.info(f"📊 Discovered {discovered_count} new store pages (Total discovered: {len(self.discovered_stores)})")
 
     def closed(self, reason):
         """Called when spider closes"""

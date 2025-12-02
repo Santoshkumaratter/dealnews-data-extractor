@@ -1,0 +1,102 @@
+================================================================================
+CLIENT PDF FIELDS → DATABASE MAPPING
+================================================================================
+
+YOUR PDF FIELD                    →  TABLE          →  COLUMN
+================================================================================
+
+DEAL INFORMATION:
+-----------------
+Deal ID                          →  deals          →  dealid
+Rec ID                           →  deals          →  recid
+URL                              →  deals          →  url
+Title                            →  deals          →  title
+Price                            →  deals          →  price
+Promo Code                       →  deals          →  promo
+Category                         →  deals          →  category
+Store                            →  deals          →  store
+Deal                             →  deals          →  deal
+Deal Plus                        →  deals          →  dealplus
+Deal Link                        →  deals          →  deallink
+Deal Text                        →  deals          →  dealtext
+Deal Hover                       →  deals          →  dealhover
+Published                        →  deals          →  published
+Popularity                       →  deals          →  popularity
+Staff Pick                       →  deals          →  staffpick
+Detail                           →  deals          →  detail
+Raw HTML                         →  deals          →  raw_html
+
+IMAGES:
+-------
+Deal Images                      →  deal_images    →  imageurl
+                                 (linked via dealid)
+
+CATEGORIES:
+-----------
+Categories                       →  deal_categories →  category_name
+                                 (linked via dealid)
+
+RELATED DEALS:
+-------------
+Related Deals                    →  related_deals  →  relatedurl
+                                 (linked via dealid)
+
+================================================================================
+QUICK REFERENCE:
+================================================================================
+
+Table: deals
+- Contains all main deal information (19 fields)
+- One row per deal
+- Unique constraint on: dealid
+
+Table: deal_images
+- Contains all deal images
+- Multiple rows per deal (one image per row)
+- Linked to deals via: dealid
+- Unique constraint on: (dealid, imageurl)
+
+Table: deal_categories
+- Contains all deal categories
+- Multiple rows per deal (one category per row)
+- Linked to deals via: dealid
+- Unique constraint on: (dealid, category_name)
+
+Table: related_deals
+- Contains related deal URLs
+- Multiple rows per deal (one related deal per row)
+- Linked to deals via: dealid
+- Unique constraint on: (dealid, relatedurl)
+
+================================================================================
+EXAMPLE QUERY:
+================================================================================
+
+-- Get complete deal information with images, categories, and related deals
+SELECT 
+    d.dealid,
+    d.title,
+    d.store,
+    d.deal,
+    d.dealplus,
+    d.deallink,
+    d.published,
+    d.popularity,
+    d.staffpick,
+    d.detail,
+    GROUP_CONCAT(DISTINCT di.imageurl) as images,
+    GROUP_CONCAT(DISTINCT dc.category_name) as categories,
+    GROUP_CONCAT(DISTINCT rd.relatedurl) as related_deals
+FROM deals d
+LEFT JOIN deal_images di ON d.dealid = di.dealid
+LEFT JOIN deal_categories dc ON d.dealid = dc.dealid
+LEFT JOIN related_deals rd ON d.dealid = rd.dealid
+WHERE d.dealid = 'deal_4432890841138584818'
+GROUP BY d.dealid;
+
+================================================================================
+
+
+
+
+
