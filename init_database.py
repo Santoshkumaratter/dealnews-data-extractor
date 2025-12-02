@@ -5,18 +5,20 @@ This script should be run before scraping to ensure the table exists.
 """
 import os
 import sys
+import argparse
 import mysql.connector
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def create_database_and_table():
+def create_database_and_table(host=None, port=None, user=None, password=None, database=None):
     """Create database and table if they don't exist"""
-    mysql_host = os.getenv('MYSQL_HOST', 'localhost')
-    mysql_port = int(os.getenv('MYSQL_PORT', '3306'))
-    mysql_user = os.getenv('MYSQL_USER', 'root')
-    mysql_password = os.getenv('MYSQL_PASSWORD', 'root')
-    mysql_database = os.getenv('MYSQL_DATABASE', 'dealnews')
+    # Command-line arguments override .env file
+    mysql_host = host or os.getenv('MYSQL_HOST', 'localhost')
+    mysql_port = int(port or os.getenv('MYSQL_PORT', '3306'))
+    mysql_user = user or os.getenv('MYSQL_USER', 'root')
+    mysql_password = password or os.getenv('MYSQL_PASSWORD', 'root')
+    mysql_database = database or os.getenv('MYSQL_DATABASE', 'dealnews')
     
     print(f"Connecting to MySQL at {mysql_host}:{mysql_port} as {mysql_user}...")
     
@@ -42,18 +44,42 @@ def create_database_and_table():
         sql_file = os.path.join(os.path.dirname(__file__), 'mysql-init', '01_create_deals.sql')
         if os.path.exists(sql_file):
             with open(sql_file, 'r') as f:
-                sql_commands = f.read()
-                # Split by semicolon and execute each command
-                for command in sql_commands.split(';'):
-                    command = command.strip()
-                    if command and not command.startswith('--'):
-                        try:
-                            cursor.execute(command)
-                        except mysql.connector.Error as e:
-                            if "already exists" not in str(e).lower():
-                                print(f"[WARNING] {e}")
+                sql_content = f.read()
+                
+            # Remove comments and split by semicolon
+            lines = []
+            for line in sql_content.split('\n'):
+                # Remove inline comments
+                if '--' in line:
+                    line = line[:line.index('--')]
+                line = line.strip()
+                if line:
+                    lines.append(line)
+            
+            # Join and split by semicolon
+            full_sql = ' '.join(lines)
+            commands = [cmd.strip() for cmd in full_sql.split(';') if cmd.strip()]
+            
+            # Execute each command
+            errors = []
+            for command in commands:
+                if command:
+                    try:
+                        cursor.execute(command)
+                    except mysql.connector.Error as e:
+                        error_msg = str(e)
+                        # Ignore "already exists" errors
+                        if "already exists" not in error_msg.lower() and "duplicate" not in error_msg.lower():
+                            errors.append(f"  ❌ {error_msg}")
+                            print(f"[ERROR executing SQL] {error_msg}")
+                            print(f"   Command: {command[:100]}...")
+            
             conn.commit()
-            print("✅ All tables created/verified (deals, deal_images, deal_categories, related_deals)")
+            
+            if errors:
+                print(f"⚠️  {len(errors)} errors occurred while creating tables")
+            else:
+                print("✅ All tables created/verified (deals, deal_images, deal_categories, related_deals)")
         else:
             print(f"⚠️  SQL file not found: {sql_file}")
             print("   Creating tables directly...")
@@ -120,6 +146,22 @@ def create_database_and_table():
         return False
 
 if __name__ == "__main__":
-    success = create_database_and_table()
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Initialize MySQL database for DealNews scraper')
+    parser.add_argument('--host', help='MySQL host (overrides .env MYSQL_HOST)')
+    parser.add_argument('--port', type=int, help='MySQL port (overrides .env MYSQL_PORT)')
+    parser.add_argument('--user', help='MySQL user (overrides .env MYSQL_USER)')
+    parser.add_argument('--password', help='MySQL password (overrides .env MYSQL_PASSWORD)')
+    parser.add_argument('--database', help='MySQL database name (overrides .env MYSQL_DATABASE)')
+    
+    args = parser.parse_args()
+    
+    success = create_database_and_table(
+        host=args.host,
+        port=args.port,
+        user=args.user,
+        password=args.password,
+        database=args.database
+    )
     sys.exit(0 if success else 1)
 
