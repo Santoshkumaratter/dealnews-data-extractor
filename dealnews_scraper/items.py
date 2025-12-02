@@ -57,6 +57,7 @@ class DealImageItem(scrapy.Item):
 
 class DealCategoryItem(scrapy.Item):
     dealid = scrapy.Field()
+    category_id = scrapy.Field()
     category_name = scrapy.Field()
     category_url = scrapy.Field()
     category_title = scrapy.Field()

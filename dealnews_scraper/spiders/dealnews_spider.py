@@ -581,28 +581,54 @@ class DealnewsSpider(scrapy.Spider):
     def extract_deal_categories_from_json(self, deal_data, item, response):
         """Extract deal categories from JSON-LD data"""
         try:
+            # ALWAYS extract category from URL first (most reliable)
+            url_category = self.extract_category_from_url(response.url)
+            if url_category:
+                import html
+                url_category = html.unescape(url_category)
+                url_category = url_category.replace('&nbsp;', ' ').replace('\xa0', ' ')
+                url_category = re.sub(r'\s+', ' ', url_category).strip()
+                
+                if url_category and len(url_category) > 1:
+                    category_item = DealCategoryItem()
+                    category_item['dealid'] = item['dealid']
+                    category_item['category_name'] = url_category[:255]
+                    category_item['category_url'] = response.url
+                    match = re.search(r'/c(\d+)/', response.url)
+                    if match:
+                        category_item['category_id'] = match.group(1)
+                    yield category_item
+            
+            # Extract from JSON-LD category field
             category = deal_data.get('category', {})
             if isinstance(category, dict):
                 if category.get('name'):
-                    category_item = DealCategoryItem()
-                    category_item['dealid'] = item['dealid']
-                    category_item['category_name'] = category['name']
-                    if category.get('url'):
-                        category_item['category_url'] = category['url']
-                    if category.get('@id'):
-                        category_item['category_id'] = category['@id']
-                    yield category_item
+                    category_name = category.get('name', '').strip()
+                    if category_name and len(category_name) > 1:
+                        category_item = DealCategoryItem()
+                        category_item['dealid'] = item['dealid']
+                        category_item['category_name'] = category_name[:255]
+                        if category.get('url'):
+                            category_item['category_url'] = category['url']
+                            # Extract category ID from URL if present
+                            match = re.search(r'/c(\d+)/', category['url'])
+                            if match:
+                                category_item['category_id'] = match.group(1)
+                        yield category_item
             elif isinstance(category, list):
                 for cat in category:
                     if isinstance(cat, dict) and cat.get('name'):
-                        category_item = DealCategoryItem()
-                        category_item['dealid'] = item['dealid']
-                        category_item['category_name'] = cat['name']
-                        if cat.get('url'):
-                            category_item['category_url'] = cat['url']
-                        if cat.get('@id'):
-                            category_item['category_id'] = cat['@id']
-                        yield category_item
+                        category_name = cat.get('name', '').strip()
+                        if category_name and len(category_name) > 1:
+                            category_item = DealCategoryItem()
+                            category_item['dealid'] = item['dealid']
+                            category_item['category_name'] = category_name[:255]
+                            if cat.get('url'):
+                                category_item['category_url'] = cat['url']
+                                match = re.search(r'/c(\d+)/', cat['url'])
+                                if match:
+                                    category_item['category_id'] = match.group(1)
+                            yield category_item
         except Exception as e:
             self.logger.error(f"Error extracting categories from JSON: {e}")
 
@@ -629,7 +655,7 @@ class DealnewsSpider(scrapy.Spider):
             # Skip if this looks like a navigation item
             for pattern in skip_patterns:
                 if pattern in deal_html and 'deal-item' not in deal_html and 'data-deal-id' not in deal_html:
-                    return None
+                        return None
             
             item = DealnewsItem()
             
@@ -709,8 +735,8 @@ class DealnewsSpider(scrapy.Spider):
                 if title and title.strip() and len(title.strip()) > 5:
                     # Skip common non-title text
                     if title.strip().lower() not in ['more options', 'more', 'less', 'buy now', 'shop now', 'read more']:
-                    item['title'] = title.strip()
-                    break
+                        item['title'] = title.strip()
+                        break
             else:
                 # Fallbacks: aria-label/title attributes or nearby snippet text
                 attr_title = deal.css('[aria-label*="details"], [aria-label*="Read More"]::attr(aria-label)').get()
@@ -795,7 +821,7 @@ class DealnewsSpider(scrapy.Spider):
             
             # Fallback to CSS selectors
             if not store:
-            store_selectors = [
+                store_selectors = [
                 # DealNews specific
                 '.store::text',
                 '.merchant::text',
@@ -815,13 +841,13 @@ class DealnewsSpider(scrapy.Spider):
                 'span[class*="vendor"]::text'
             ]
             
-            for selector in store_selectors:
-                store = deal.css(selector).get()
-                if store and store.strip():
+                for selector in store_selectors:
+                    store = deal.css(selector).get()
+                    if store and store.strip():
                         store = store.strip()
-                    break
-                
-                item['store'] = store or ''
+                        break
+            
+            item['store'] = store or ''
             
             # Extract category from deal element - try JSON-LD first, then data attributes, then CSS
             category_value = ''
@@ -846,18 +872,18 @@ class DealnewsSpider(scrapy.Spider):
             
             # Fallback to CSS selectors
             if not category_value:
-            category_selectors = [
-                '.category::text',
-                '.deal-category::text',
-                '.breadcrumb::text',
-                '.deal-breadcrumb::text',
-                '.category-name::text',
-                '.cat::text',
-                '.section::text',
-                '.department::text'
-            ]
-            
-            for selector in category_selectors:
+                category_selectors = [
+                    '.category::text',
+                    '.deal-category::text',
+                    '.breadcrumb::text',
+                    '.deal-breadcrumb::text',
+                    '.category-name::text',
+                    '.cat::text',
+                    '.section::text',
+                    '.department::text'
+                ]
+                
+                for selector in category_selectors:
                     category = deal.css(selector).get()
                     if category and category.strip():
                         category_value = category.strip()
@@ -956,7 +982,7 @@ class DealnewsSpider(scrapy.Spider):
                         elif 'prime' in text_lower or 'w/ prime' in text_lower:
                             dealplus_text = 'free shipping w/ Prime'
                             break
-            else:
+                        else:
                             dealplus_text = 'free shipping'
                             break
                     # Pattern 2: "w/ Prime" or "w/Prime" (separate if, not elif)
@@ -1163,21 +1189,28 @@ class DealnewsSpider(scrapy.Spider):
             return None
 
     def extract_category_from_url(self, url):
-        """Extract category from URL"""
+        """Extract category from URL - improved for DealNews patterns"""
         if not url:
             return ''
         
-        # Extract category from URL patterns
+        import re
+        
+        # DealNews pattern: /c123/Category-Name/ or /c123/Category/Subcategory/
+        # Extract full category path
+        match = re.search(r'/c\d+/([^/?]+)', url)
+        if match:
+            category_path = match.group(1)
+            # Convert "Home-Garden/Bed-Bath/Bedding" to "Home & Garden > Bed & Bath > Bedding"
+            category_path = category_path.replace('-', ' ').replace('/', ' > ')
+            # Clean up HTML entities
+            category_path = category_path.replace('&amp;', '&').replace('&nbsp;', ' ')
+            return category_path.strip()
+        
+        # Fallback: Extract from /cat/ pattern
         if '/cat/' in url:
             parts = url.split('/cat/')
             if len(parts) > 1:
                 category_part = parts[1].split('/')[0]
-                return category_part.replace('-', ' ').title()
-        elif '/c' in url:
-            # Extract from /c123/Category/ pattern
-            parts = url.split('/c')
-            if len(parts) > 1:
-                category_part = parts[1].split('/')[1] if len(parts[1].split('/')) > 1 else ''
                 return category_part.replace('-', ' ').title()
         
         return ''
@@ -1221,18 +1254,65 @@ class DealnewsSpider(scrapy.Spider):
 
     def extract_deal_categories(self, deal, item, response):
         """Extract ONLY deal-specific categories from within the deal container (NOT page-level)"""
-        # Extract category from URL (dynamic per page, but unique per deal's page context)
+        categories_yielded = 0
+        
+        # ALWAYS extract category from URL first (this is the most reliable source)
         url_category = self.extract_category_from_url(response.url)
         if url_category:
+            # Clean up category name (remove HTML entities, normalize)
+            import html
+            url_category = html.unescape(url_category)
+            url_category = url_category.replace('&nbsp;', ' ').replace('\xa0', ' ')
+            url_category = re.sub(r'\s+', ' ', url_category).strip()
+            
+            if url_category and len(url_category) > 1:
                 category_item = DealCategoryItem()
                 category_item['dealid'] = item['dealid']
-            category_item['category_name'] = url_category
-            category_item['category_url'] = response.url
-                    # Extract category ID from URL if present (e.g., /c142/Electronics/)
-            match = re.search(r'/c(\d+)/', response.url)
-                    if match:
-                        category_item['category_id'] = match.group(1)
+                category_item['category_name'] = url_category[:255]  # Truncate to 255 chars
+                category_item['category_url'] = response.url
+                # Extract category ID from URL if present (e.g., /c142/Electronics/)
+                match = re.search(r'/c(\d+)/', response.url)
+                if match:
+                    category_item['category_id'] = match.group(1)
                 yield category_item
+                categories_yielded += 1
+                self.logger.debug(f"✅ Extracted URL category '{url_category}' for deal {item['dealid']}")
+        
+        # Extract category from JSON-LD within the deal container (for homepage deals or as fallback)
+        json_ld_script = deal.css('script[type="application/ld+json"]::text').get()
+        if json_ld_script:  # Always try JSON-LD, even if URL category exists (for completeness)
+            try:
+                import json
+                json_data = json.loads(json_ld_script)
+                if isinstance(json_data, dict):
+                    # Check for category in the offer
+                    category_obj = json_data.get('category', {})
+                    if isinstance(category_obj, dict) and category_obj.get('name'):
+                        category_name = category_obj.get('name', '').strip()
+                        if category_name:
+                            # Clean HTML entities
+                            import html
+                            category_name = html.unescape(category_name)
+                            category_name = category_name.replace('&nbsp;', ' ').replace('\xa0', ' ')
+                            category_name = re.sub(r'\s+', ' ', category_name).strip()
+                            
+                            if category_name and len(category_name) > 1:
+                                # Only yield if we don't already have this category from URL
+                                if not url_category or category_name.lower() != url_category.lower():
+                                    category_item = DealCategoryItem()
+                                    category_item['dealid'] = item['dealid']
+                                    category_item['category_name'] = category_name[:255]
+                                    if category_obj.get('url'):
+                                        category_item['category_url'] = category_obj['url']
+                                        # Extract category ID from URL
+                                        match = re.search(r'/c(\d+)/', category_obj['url'])
+                                        if match:
+                                            category_item['category_id'] = match.group(1)
+                                    yield category_item
+                                    categories_yielded += 1
+                                    self.logger.debug(f"✅ Extracted JSON-LD category '{category_name}' for deal {item['dealid']}")
+            except Exception as e:
+                self.logger.debug(f"Error extracting category from JSON-LD: {e}")
         
         # Extract deal-specific category from deal container only (scoped to this deal)
         deal_category = deal.css('.category::text, .deal-category::text, .category-name::text').get()
@@ -1245,6 +1325,7 @@ class DealnewsSpider(scrapy.Spider):
                 category_item['dealid'] = item['dealid']
                 category_item['category_name'] = deal_category
                 yield category_item
+                categories_yielded += 1
         
         # Extract deal-specific tags/labels within deal container only
         # Use scoped selectors to avoid page-level elements
