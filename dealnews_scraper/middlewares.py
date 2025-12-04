@@ -54,7 +54,7 @@ class ProxyMiddleware:
         # If runtime fallback disabled proxy, skip applying proxy
         if self.disable_proxy_runtime:
             return None
-
+        
         # Set comprehensive browser-like headers to avoid detection
         request.headers.setdefault('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7')
         request.headers.setdefault('Accept-Language', 'en-US,en;q=0.9')
@@ -199,11 +199,11 @@ class ProxyMiddleware:
         else:
             if proxy_url_override:
                 proxy = proxy_url_override
-            else:
-                # Webshare rotating gateway
-                proxy_host = os.getenv("PROXY_HOST", "p.webshare.io")
-                proxy_port = os.getenv("PROXY_PORT", "80")
-                proxy = f"http://{proxy_host}:{proxy_port}"
+        else:
+            # Webshare rotating gateway
+            proxy_host = os.getenv("PROXY_HOST", "p.webshare.io")
+            proxy_port = os.getenv("PROXY_PORT", "80")
+            proxy = f"http://{proxy_host}:{proxy_port}"
 
         if not proxy_url_override and proxy_user and proxy_pass:
             # Add credentials to proxy URL

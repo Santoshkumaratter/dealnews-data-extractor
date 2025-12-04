@@ -61,6 +61,53 @@ def verify_database():
         print(f"   Total Related Deals: {total_related:,}")
         print()
         
+        # Check for duplicate deals
+        print("🔍 Checking for Duplicates:")
+        cursor.execute("""
+            SELECT dealid, COUNT(*) as count 
+            FROM deals 
+            GROUP BY dealid 
+            HAVING count > 1
+        """)
+        duplicate_deals = cursor.fetchall()
+        if duplicate_deals:
+            print(f"   ❌ Found {len(duplicate_deals)} duplicate deal IDs:")
+            for dealid, count in duplicate_deals[:10]:
+                print(f"      - {dealid}: {count} times")
+            if len(duplicate_deals) > 10:
+                print(f"      ... and {len(duplicate_deals) - 10} more")
+        else:
+            print("   ✅ No duplicate deals found")
+        print()
+        
+        # Check for duplicate images
+        cursor.execute("""
+            SELECT dealid, imageurl, COUNT(*) as count 
+            FROM deal_images 
+            GROUP BY dealid, imageurl 
+            HAVING count > 1
+        """)
+        duplicate_images = cursor.fetchall()
+        if duplicate_images:
+            print(f"   ⚠️  Found {len(duplicate_images)} duplicate image entries")
+        else:
+            print("   ✅ No duplicate images found")
+        print()
+        
+        # Check for duplicate categories
+        cursor.execute("""
+            SELECT dealid, category_name, COUNT(*) as count 
+            FROM deal_categories 
+            GROUP BY dealid, category_name 
+            HAVING count > 1
+        """)
+        duplicate_categories = cursor.fetchall()
+        if duplicate_categories:
+            print(f"   ⚠️  Found {len(duplicate_categories)} duplicate category entries")
+        else:
+            print("   ✅ No duplicate categories found")
+        print()
+        
         if total_deals == 0:
             print("⚠️  No deals found in database.")
             print("   Run: python3 run_scraper.py")

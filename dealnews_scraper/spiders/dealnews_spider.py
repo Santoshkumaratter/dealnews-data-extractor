@@ -238,19 +238,34 @@ class DealnewsSpider(scrapy.Spider):
                 yield from self.extract_deal_categories(deal, item, response)
                 yield from self.extract_related_deals(deal, item, response)
                 
-                # Visit detail page for related deals (increased frequency to get more related deals)
-                deallink = item.get('deallink') or item.get('url', '')
-                if deallink and self.detail_pages_visited < self.max_detail_pages and '/deals/' in deallink:
-                    # Visit detail page to get related deals (visit every 5th deal for better coverage)
-                    if self.deals_extracted % 5 == 0:  # Visit every 5th deal's detail page (was 10th)
-                        yield scrapy.Request(
-                            url=deallink,
-                            callback=self.parse_deal_detail,
-                            meta={'dealid': item['dealid'], 'item': item},
-                            errback=self.errback_http,
-                            dont_filter=True
-                        )
-                        self.detail_pages_visited += 1
+                # Visit detail page for related deals (use DealNews detail page URL, not external merchant URL)
+                deal_detail_url = item.get('url', '')  # This should be the DealNews detail page URL
+                if deal_detail_url and self.detail_pages_visited < self.max_detail_pages:
+                    # Only visit if it's a DealNews detail page (contains .html and dealnews.com)
+                    if '.html' in deal_detail_url and 'dealnews.com' in deal_detail_url:
+                        # Check if it's actually a detail page (not a listing page)
+                        import re
+                        is_detail_page = re.search(r'/\d+\.html', deal_detail_url) is not None
+                        
+                        if is_detail_page:
+                            # Visit every deal's detail page to get all related deals
+                            yield scrapy.Request(
+                                url=deal_detail_url,
+                                callback=self.parse_deal_detail,
+                                meta={'dealid': item['dealid'], 'item': item},
+                                errback=self.errback_http,
+                                dont_filter=True
+                            )
+                            self.detail_pages_visited += 1
+                            self.logger.info(f"📄 Queued detail page visit #{self.detail_pages_visited} for deal {item['dealid']}: {deal_detail_url}")
+                        else:
+                            self.logger.debug(f"⚠️  Skipping - URL doesn't match detail page pattern: {deal_detail_url}")
+                    else:
+                        self.logger.debug(f"⚠️  Skipping detail page visit - not a DealNews detail page: {deal_detail_url}")
+                elif not deal_detail_url:
+                    self.logger.debug(f"⚠️  No detail page URL found for deal {item['dealid']}")
+                elif self.detail_pages_visited >= self.max_detail_pages:
+                    self.logger.debug(f"⚠️  Reached max detail pages limit ({self.max_detail_pages})")
         
         # Discover category and store pages for comprehensive crawling (100k+ deals)
         # Always discover categories (even if we're close to max) to ensure we get all paths
@@ -610,7 +625,6 @@ class DealnewsSpider(scrapy.Spider):
                         category_item['category_name'] = category_name[:255]
                         if category.get('url'):
                             category_item['category_url'] = category['url']
-                            # Extract category ID from URL if present
                             match = re.search(r'/c(\d+)/', category['url'])
                             if match:
                                 category_item['category_id'] = match.group(1)
@@ -655,7 +669,7 @@ class DealnewsSpider(scrapy.Spider):
             # Skip if this looks like a navigation item
             for pattern in skip_patterns:
                 if pattern in deal_html and 'deal-item' not in deal_html and 'data-deal-id' not in deal_html:
-                        return None
+                    return None
             
             item = DealnewsItem()
             
@@ -688,7 +702,70 @@ class DealnewsSpider(scrapy.Spider):
 
             item['dealid'] = dealid
             item['recid'] = deal.css('::attr(data-rec-id)').get() or ''
-            item['url'] = response.url
+            
+            # Extract DealNews detail page URL (not listing page URL)
+            # DealNews detail pages have format: /Title/21791913.html
+            deal_detail_url = None
+            detail_url_selectors = [
+                # Priority 1: Title links (most reliable)
+                '.title-link::attr(href)',
+                '.pitch .title-link::attr(href)',
+                '.deal-title a::attr(href)',
+                'h2 a::attr(href), h3 a::attr(href)',  # Headings with links
+                # Priority 2: Any .html link in deal container
+                'a[href*=".html"]::attr(href)',  # Links ending in .html (DealNews detail pages)
+                # Priority 3: Deal links
+                'a[href*="/deals/"]::attr(href)',  # Deal links (but these might be listing pages)
+            ]
+            
+            for selector in detail_url_selectors:
+                urls = deal.css(selector).getall()  # Get all matches, not just first
+                for url in urls:
+                    if not url or not url.strip():
+                        continue
+                    # Make absolute URL
+                    if not url.startswith('http'):
+                        url = response.urljoin(url)
+                    # Check if it's a DealNews detail page
+                    # Detail pages: contain .html, are on dealnews.com, and have numeric ID pattern
+                    if '.html' in url and 'dealnews.com' in url:
+                        # Check if it's NOT a /deals/ listing page
+                        url_before_html = url.split('.html')[0]
+                        if '/deals/' not in url_before_html:
+                            # Check if it has a numeric ID pattern (e.g., /21791913.html)
+                            import re
+                            if re.search(r'/\d+\.html', url):
+                                deal_detail_url = url
+                                break
+                if deal_detail_url:
+                    break
+            
+            # Fallback: try to find link with deal ID pattern (e.g., 21791913)
+            if not deal_detail_url:
+                # Extract numeric deal ID from dealid if possible
+                deal_id_num = None
+                if dealid:
+                    # Try to extract numeric ID from dealid
+                    import re
+                    id_match = re.search(r'\d+', dealid.replace('deal_', '').replace('-', ''))
+                    if id_match:
+                        deal_id_num = id_match.group(0)
+                
+                if deal_id_num:
+                    # Look for links containing this deal ID
+                    id_links = deal.css(f'a[href*="{deal_id_num}"]::attr(href)').getall()
+                    for link in id_links:
+                        if '.html' in link and 'dealnews.com' in link:
+                            deal_detail_url = response.urljoin(link)
+                            break
+            
+            item['url'] = deal_detail_url or response.url  # Fallback to listing page if not found
+            
+            # Log for debugging
+            if deal_detail_url:
+                self.logger.debug(f"✅ Extracted detail page URL for deal {dealid}: {deal_detail_url}")
+            else:
+                self.logger.debug(f"⚠️  Could not extract detail page URL for deal {dealid}, using listing page: {response.url}")
             
             # IMPROVED Title extraction with UPDATED DealNews selectors
             title_selectors = [
@@ -841,11 +918,11 @@ class DealnewsSpider(scrapy.Spider):
                 'span[class*="vendor"]::text'
             ]
             
-                for selector in store_selectors:
-                    store = deal.css(selector).get()
-                    if store and store.strip():
-                        store = store.strip()
-                        break
+            for selector in store_selectors:
+                store = deal.css(selector).get()
+                if store and store.strip():
+                    store = store.strip()
+                    break
             
             item['store'] = store or ''
             
@@ -873,21 +950,21 @@ class DealnewsSpider(scrapy.Spider):
             # Fallback to CSS selectors
             if not category_value:
                 category_selectors = [
-                    '.category::text',
-                    '.deal-category::text',
-                    '.breadcrumb::text',
-                    '.deal-breadcrumb::text',
-                    '.category-name::text',
-                    '.cat::text',
-                    '.section::text',
-                    '.department::text'
-                ]
-                
-                for selector in category_selectors:
-                    category = deal.css(selector).get()
-                    if category and category.strip():
-                        category_value = category.strip()
-                        break
+                '.category::text',
+                '.deal-category::text',
+                '.breadcrumb::text',
+                '.deal-breadcrumb::text',
+                '.category-name::text',
+                '.cat::text',
+                '.section::text',
+                '.department::text'
+            ]
+            
+            for selector in category_selectors:
+                category = deal.css(selector).get()
+                if category and category.strip():
+                    category_value = category.strip()
+                    break
             
             item['category'] = category_value
 
@@ -1353,21 +1430,45 @@ class DealnewsSpider(scrapy.Spider):
                 yield category_item
 
     def extract_related_deals(self, deal, item, response):
-        """Extract related deals from deal container (dynamic, deal-specific only)"""
-        # Extract related deals from within deal container only
-        related_links = (
+        """Extract related deals from deal container and nearby deals on listing page"""
+        related_links = []
+        
+        # 1. Extract from deal container (explicit related deals)
+        container_links = (
             deal.css('.related-deals a::attr(href), .related a::attr(href), .similar a::attr(href)').getall() or
             deal.css('[class*="related"] a::attr(href), [class*="similar"] a::attr(href)').getall() or
             []
         )
+        related_links.extend(container_links)
         
-        # Also try to extract from deal's main item if available
+        # 2. Extract nearby deals on the same page (related by proximity)
+        # Get all deal links on the page and use nearby ones as related
+        all_deal_links = response.css('a[href*="/deals/"]::attr(href), a[href*="/deal/"]::attr(href)').getall()
+        current_deallink = item.get('deallink', '') or item.get('url', '')
+        current_index = -1
+        
+        # Find current deal's position in the list
+        for idx, link in enumerate(all_deal_links):
+            if link == current_deallink or current_deallink in link or link in current_deallink:
+                current_index = idx
+                break
+        
+        # Add nearby deals (2 before and 2 after) as related deals
+        if current_index >= 0:
+            start_idx = max(0, current_index - 2)
+            end_idx = min(len(all_deal_links), current_index + 3)
+            for idx in range(start_idx, end_idx):
+                if idx != current_index:
+                    link = all_deal_links[idx]
+                    if link and link.strip():
+                        related_links.append(link)
+        
+        # 3. Also try to extract from deal's main item if available
         if item.get('related_deals'):
             related_links.extend(item.get('related_deals', []))
         
         # Filter out duplicates and invalid links
         seen_links = set()
-        current_deallink = item.get('deallink', '') or item.get('url', '')
         
         for link in related_links:
             if not link or not link.strip():
@@ -1378,14 +1479,14 @@ class DealnewsSpider(scrapy.Spider):
                 if not link.startswith('http'):
                     link = response.urljoin(link)
             except:
-                pass
+                continue
             
             # Skip if it's the same as current deal's link
             if link == current_deallink or link in seen_links:
                 continue
             
             # Only process valid deal URLs
-            if '/deals/' in link or '/deal/' in link or 'dealnews.com' in link:
+            if '/deals/' in link or '/deal/' in link or ('dealnews.com' in link and ('/deals/' in link or '/deal/' in link)):
                 seen_links.add(link)
                 related_item = RelatedDealItem()
                 related_item['dealid'] = item['dealid']
@@ -1404,24 +1505,45 @@ class DealnewsSpider(scrapy.Spider):
         self.logger.info(f"🔍 Parsing detail page for deal {dealid}: {response.url}")
         
         # Extract related deals from detail page (more likely to have them)
-        # Try multiple strategies to find related deals
+        # COMPREHENSIVE extraction for DealNews detail pages
+        self.logger.info(f"🔍 Extracting related deals from detail page: {response.url}")
+        
+        # Strategy 1: Look for all .html links on the page (DealNews detail pages)
+        all_html_links = response.css('a[href*=".html"]::attr(href)').getall()
+        self.logger.debug(f"Found {len(all_html_links)} total .html links on page")
+        
+        # Strategy 2: Look in specific related/similar sections
         related_selectors = [
-            '.related-deals a::attr(href)',
-            '.related a::attr(href)',
-            '.similar-deals a::attr(href)',
-            '.similar a::attr(href)',
-            '[class*="related"] a[href*="/deals/"]::attr(href)',
-            '[class*="similar"] a[href*="/deals/"]::attr(href)',
-            'section[class*="related"] a::attr(href)',
-            'section[class*="similar"] a::attr(href)',
-            # Also try common DealNews patterns
-            '.recommended-deals a::attr(href)',
-            '.you-may-also-like a::attr(href)',
-            '[data-related] a::attr(href)',
-            'aside a[href*="/deals/"]::attr(href)',  # Sidebar related deals
-            # Try more generic patterns
-            'article a[href*="/deals/"]::attr(href)',
-            '.deal-item a[href*="/deals/"]::attr(href)',
+            # DealNews specific related sections (highest priority)
+            'section[class*="related"] a[href*=".html"]::attr(href)',
+            'section[class*="similar"] a[href*=".html"]::attr(href)',
+            'section[class*="recommended"] a[href*=".html"]::attr(href)',
+            'section[class*="more"] a[href*=".html"]::attr(href)',
+            '.related-deals a[href*=".html"]::attr(href)',
+            '.related-items a[href*=".html"]::attr(href)',
+            '.similar-deals a[href*=".html"]::attr(href)',
+            '.recommended-deals a[href*=".html"]::attr(href)',
+            '.you-may-also-like a[href*=".html"]::attr(href)',
+            # Generic related sections
+            '[class*="related"] a[href*=".html"]::attr(href)',
+            '[class*="similar"] a[href*=".html"]::attr(href)',
+            '[class*="recommended"] a[href*=".html"]::attr(href)',
+            # Sidebar and recommendations
+            'aside a[href*=".html"]::attr(href)',
+            '.sidebar a[href*=".html"]::attr(href)',
+            'nav[class*="related"] a[href*=".html"]::attr(href)',
+            # DealNews specific containers
+            '.deal-list a[href*=".html"]::attr(href)',
+            '.deal-items a[href*=".html"]::attr(href)',
+            '.deals-grid a[href*=".html"]::attr(href)',
+            '.deals-list a[href*=".html"]::attr(href)',
+            # Main content area (but exclude navigation/footer)
+            'main article a[href*=".html"]::attr(href)',
+            'main section a[href*=".html"]::attr(href)',
+            'article[class*="deal"] a[href*=".html"]::attr(href)',
+            # Generic patterns
+            'article a[href*=".html"]::attr(href)',
+            '.deal-item a[href*=".html"]::attr(href)',
         ]
         
         related_links = []
@@ -1433,21 +1555,48 @@ class DealnewsSpider(scrapy.Spider):
             links = response.css(selector).getall()
             if links:
                 related_links.extend(links)
-                self.logger.info(f"✅ Found {len(links)} related deals using selector: {selector}")
+                self.logger.info(f"✅ Found {len(links)} related deals using selector: {selector[:60]}...")
         
-        # If no specific related deals found, try to find deals in sidebar or recommendations section
+        # Strategy 3: If no specific sections found, use all .html links but filter intelligently
+        if not related_links and all_html_links:
+            # Filter: exclude current page, navigation, footer, and non-deal pages
+            current_url_path = response.url.split('/')[-1]  # e.g., "21791913.html"
+            for link in all_html_links:
+                # Make absolute
+                if not link.startswith('http'):
+                    link = response.urljoin(link)
+                # Skip current deal
+                if link == response.url or current_url_path in link:
+                    continue
+                # Only include if it looks like a deal detail page (has deal ID pattern)
+                # DealNews detail pages have format: /Title/21791913.html
+                if '.html' in link and 'dealnews.com' in link:
+                    # Check if it has a numeric ID in the URL (deal ID pattern)
+                    import re
+                    if re.search(r'/\d+\.html', link):
+                        related_links.append(link)
+            
+            if related_links:
+                self.logger.info(f"✅ Found {len(related_links)} related deals from all .html links (filtered)")
+        
+        # Strategy 4: Fallback to /deals/ pattern
         if not related_links:
-            # Look for deals in common recommendation sections
             sidebar_deals = response.css('aside a[href*="/deals/"]::attr(href), .sidebar a[href*="/deals/"]::attr(href)').getall()
             if sidebar_deals:
-                related_links.extend(sidebar_deals[:5])  # Limit to 5 to avoid too many
+                related_links.extend(sidebar_deals[:10])  # Increased limit
                 self.logger.info(f"✅ Found {len(sidebar_deals)} deals in sidebar")
         
         if not related_links:
-            self.logger.debug(f"⚠️  No related deals found on detail page: {response.url}")
+            self.logger.warning(f"⚠️  No related deals found on detail page: {response.url}")
+        else:
+            self.logger.info(f"📊 Total related deals found: {len(related_links)}")
         
-        # Yield related deal items
+        # Yield related deal items - COMPREHENSIVE filtering
         seen_links = set()
+        current_url_path = response.url.split('/')[-1]  # e.g., "21791913.html"
+        current_deal_id = current_url_path.replace('.html', '') if '.html' in current_url_path else ''
+        related_count = 0
+        
         for link in related_links:
             if not link or not link.strip():
                 continue
@@ -1456,20 +1605,55 @@ class DealnewsSpider(scrapy.Spider):
             try:
                 if not link.startswith('http'):
                     link = response.urljoin(link)
-            except:
+            except Exception as e:
+                self.logger.debug(f"Skipping invalid link: {link} - {e}")
                 continue
             
-            # Skip duplicates and current deal
-            if link in seen_links or link == response.url:
+            # Skip duplicates
+            if link in seen_links:
+                continue
+            seen_links.add(link)
+            
+            # Skip current deal (exact match or same deal ID)
+            if link == response.url:
                 continue
             
-            # Only process valid deal URLs
-            if '/deals/' in link or '/deal/' in link:
-                seen_links.add(link)
+            # Extract deal ID from link if possible
+            link_path = link.split('/')[-1] if '/' in link else ''
+            link_deal_id = link_path.replace('.html', '') if '.html' in link_path else ''
+            if link_deal_id and current_deal_id and link_deal_id == current_deal_id:
+                continue
+            
+            # Only process valid DealNews deal URLs
+            is_dealnews_deal = False
+            
+            # Check if it's a DealNews detail page (.html with deal ID pattern)
+            if '.html' in link and 'dealnews.com' in link:
+                # DealNews detail pages have format: /Title/21791913.html
+                import re
+                if re.search(r'/\d+\.html', link):  # Has numeric ID before .html
+                    is_dealnews_deal = True
+                elif '/deals/' not in link.split('.html')[0]:  # Not a /deals/ listing page
+                    # Might still be a detail page, include it
+                    is_dealnews_deal = True
+            
+            # Also check for /deals/ pattern
+            if not is_dealnews_deal:
+                if '/deals/' in link and 'dealnews.com' in link:
+                    is_dealnews_deal = True
+            
+            if is_dealnews_deal:
                 related_item = RelatedDealItem()
                 related_item['dealid'] = dealid
                 related_item['relatedurl'] = link
                 yield related_item
+                related_count += 1
+                self.logger.debug(f"✅ Yielding related deal #{related_count} for {dealid}: {link[:80]}...")
+        
+        if related_count > 0:
+            self.logger.info(f"✅ Successfully extracted {related_count} related deals for deal {dealid} from {response.url}")
+        else:
+            self.logger.warning(f"⚠️  No valid related deals extracted for {dealid} from {response.url}")
 
     def handle_pagination(self, response):
         """Handle pagination and infinite scroll for DealNews - OPTIMIZED for 100k+ deals"""

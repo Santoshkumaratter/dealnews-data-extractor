@@ -1,0 +1,72 @@
+================================================================================
+DATABASE CHECK KARNE KE LIYE INSTRUCTIONS
+================================================================================
+
+1. PEHLE DATABASE EXIST KARTA HAI YA NAHI CHECK KARO:
+   
+   python3 check_remote_database.py --host 107.172.13.162 --user root --password YOUR_PASSWORD
+   
+   Ye command se pata chalega:
+   - Database exist karta hai ya nahi
+   - Kitne tables hain
+   - Kitne rows hain har table me
+
+2. phpMyAdmin ME DATABASE DEKHNE KE LIYE:
+   
+   Step 1: Browser me jao
+   http://107.172.13.162:8081
+   
+   Step 2: MySQL credentials enter karo:
+   - Username: (apna MySQL username)
+   - Password: (apna MySQL password)
+   
+   Step 3: Left sidebar me "dealnews" database dikhega
+   - Agar nahi dikha, to "Databases" tab me check karo
+   
+   Step 4: "dealnews" par click karo
+   - 4 tables dikhenge:
+     * deals (67,791+ rows)
+     * deal_images (133,824+ rows)
+     * deal_categories (185,457+ rows)
+     * related_deals (0 rows)
+
+3. DIRECT URL SE ACCESS KARO:
+   
+   Database structure dekhne ke liye:
+   http://107.172.13.162:8081/index.php?route=/database/structure&db=dealnews
+   
+   SQL queries run karne ke liye:
+   http://107.172.13.162:8081/index.php?route=/sql&db=dealnews
+   
+   Deals table browse karne ke liye:
+   http://107.172.13.162:8081/index.php?route=/table/browse&db=dealnews&table=deals
+
+4. AGAR DATABASE NAHI DIKHA:
+   
+   Database create karo:
+   python3 init_database.py --host 107.172.13.162 --user root --password YOUR_PASSWORD
+
+5. QUICK SQL QUERIES:
+   
+   Total deals count:
+   SELECT COUNT(*) FROM deals;
+   
+   Sample deals dekhne ke liye:
+   SELECT * FROM deals LIMIT 10;
+   
+   Deal URL dekhne ke liye (browser me open karne ke liye):
+   SELECT dealid, title, deallink FROM deals WHERE dealid = '21792018';
+
+================================================================================
+IMPORTANT NOTES:
+================================================================================
+
+- Database name: dealnews
+- Server: 107.172.13.162:3306
+- phpMyAdmin: http://107.172.13.162:8081
+- Total deals saved: 67,791
+- Total images: 133,824
+- Total categories: 185,457
+
+================================================================================
+
