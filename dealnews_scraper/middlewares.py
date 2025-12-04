@@ -196,9 +196,8 @@ class ProxyMiddleware:
         if self.proxy_pool:
             proxy = random.choice(self.proxy_pool)
             spider.logger.debug(f"Using proxy from pool: {proxy}")
-        else:
-            if proxy_url_override:
-                proxy = proxy_url_override
+        elif proxy_url_override:
+            proxy = proxy_url_override
         else:
             # Webshare rotating gateway
             proxy_host = os.getenv("PROXY_HOST", "p.webshare.io")
