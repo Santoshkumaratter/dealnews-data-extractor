@@ -43,7 +43,6 @@ class NormalizedMySQLPipeline:
                     port=mysql_port,
                     user=mysql_user,
                     password=mysql_password,
-                    database=mysql_database,
                     connection_timeout=10
                 )
                 test_conn.close()
@@ -56,22 +55,26 @@ class NormalizedMySQLPipeline:
                 return
 
             # If connection test passed, create main connection
-            # Note: pool_reset_session can cause database to be deselected, so we'll select it explicitly
+            # First connect WITHOUT database to ensure we can create it if needed
             self.conn = mysql.connector.connect(
                 host=mysql_host,
                 port=mysql_port,
                 user=mysql_user,
                 password=mysql_password,
-                database=mysql_database,
                 use_pure=True,
                 connection_timeout=60,
                 autocommit=True
             )
             
             self.cursor = self.conn.cursor()
-            # Explicitly select database to ensure it's set
+            
+            # Create database if it doesn't exist
+            spider.logger.info(f"Checking/Creating database: {mysql_database}")
+            self.cursor.execute(f"CREATE DATABASE IF NOT EXISTS {mysql_database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+            
+            # Now select the database
             self.cursor.execute(f"USE {mysql_database}")
-            spider.logger.info("✅ Normalized MySQL connection successful")
+            spider.logger.info(f"✅ Normalized MySQL connection successful to {mysql_database}")
             
             # Create all tables
             self.create_all_tables()
@@ -400,6 +403,7 @@ class NormalizedMySQLPipeline:
                         self.conn.reconnect()
                         self.cursor = self.conn.cursor()
                         # Explicitly select database after reconnect
+                        self.cursor.execute(f"CREATE DATABASE IF NOT EXISTS {mysql_database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
                         self.cursor.execute(f"USE {mysql_database}")
                     except Exception as reconnect_err:
                         spider.logger.error(f"❌ Reconnection failed: {reconnect_err}")
@@ -413,10 +417,15 @@ class NormalizedMySQLPipeline:
                             port=mysql_port,
                             user=mysql_user,
                             password=mysql_password,
-                            database=mysql_database,
+                            # database=mysql_database,  # Don't specify database yet
+                            use_pure=True,  # Add explicit use_pure=True for consistency
+                            connection_timeout=60,
                             autocommit=True
                         )
                         self.cursor = self.conn.cursor()
+                        # Ensure database exists and select it
+                        self.cursor.execute(f"CREATE DATABASE IF NOT EXISTS {mysql_database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+                        self.cursor.execute(f"USE {mysql_database}")
                 else:
                     spider.logger.error(f"❌ Failed to save deal after {max_retries} attempts")
             except Exception as e:

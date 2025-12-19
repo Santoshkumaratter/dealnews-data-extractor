@@ -327,6 +327,23 @@ class DealnewsSpider(scrapy.Spider):
                 yield from self.extract_deal_images_from_json(deal_data, item)
                 yield from self.extract_deal_categories_from_json(deal_data, item, response)
                 yield from self.extract_related_deals_from_json(deal_data, item)
+                
+                # CRITICAL FIX: Visit detail page for related deals
+                deal_detail_url = item.get('url', '')
+                if deal_detail_url and self.detail_pages_visited < self.max_detail_pages:
+                    if '.html' in deal_detail_url and 'dealnews.com' in deal_detail_url:
+                        import re
+                        is_detail_page = re.search(r'/\d+\.html', deal_detail_url) is not None
+                        if is_detail_page:
+                            yield scrapy.Request(
+                                url=deal_detail_url,
+                                callback=self.parse_deal_detail,
+                                meta={'dealid': item['dealid'], 'item': item},
+                                errback=self.errback_http,
+                                dont_filter=True
+                            )
+                            self.detail_pages_visited += 1
+                            self.logger.info(f"📄 Queued detail page #{self.detail_pages_visited} for JSON-LD deal: {deal_detail_url}")
 
     def extract_deal_from_json(self, deal_data, response):
         """Extract deal item from JSON-LD structured data"""
