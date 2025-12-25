@@ -276,10 +276,10 @@ class NormalizedMySQLPipeline:
                 
                 # Save to deals table
                 deal_sql = """
-                INSERT INTO deals (dealid, recid, url, title, price, promo, category, store, deal, dealplus, 
+                INSERT INTO deals (dealid, recid, url, title, price, promo, category, category_id, store, deal, dealplus, 
                                  deallink, dealtext, dealhover, published, popularity, staffpick, 
                                  detail, raw_html, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 ON DUPLICATE KEY UPDATE 
                     recid = VALUES(recid),
                     url = VALUES(url),
@@ -287,6 +287,7 @@ class NormalizedMySQLPipeline:
                     price = VALUES(price),
                     promo = VALUES(promo),
                     category = VALUES(category),
+                    category_id = VALUES(category_id),
                     store = VALUES(store),
                     deal = VALUES(deal),
                     dealplus = VALUES(dealplus),
@@ -328,6 +329,11 @@ class NormalizedMySQLPipeline:
                     spider.logger.warning(f"⚠️ Dealplus field contains JSON for deal {dealid}, clearing it")
                     dealplus_value = ''
                 
+                # Extract category_id from first category if available
+                category_id_value = ''
+                if hasattr(item, 'get') and 'category_id' in item:
+                    category_id_value = item.get('category_id', '') or ''
+                
                 deal_values = (
                     dealid,
                     item.get('recid', '') or '',
@@ -336,6 +342,7 @@ class NormalizedMySQLPipeline:
                     item.get('price', '') or '',
                     item.get('promo', '') or '',
                     category_value,
+                    category_id_value,  # Add category_id
                     item.get('store', '') or '',
                     deal_value,  # Use cleaned deal value
                     dealplus_value,  # Use cleaned dealplus value
@@ -524,22 +531,35 @@ class NormalizedMySQLPipeline:
             # Truncate to 255 characters
             category_name = category_name[:255]
             
+            # Use category_name as category_id if category_id is not provided
+            category_id = (cat_data.get('category_id', '') or '').strip()
+            if not category_id:
+                category_id = category_name
+            
+            # Save to categories lookup table (normalized - one row per unique category)
             category_sql = """
-            INSERT INTO deal_categories (dealid, category_id, category_name, category_url, category_title, created_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            INSERT INTO categories (category_id, category_name, category_url, category_description, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
             ON DUPLICATE KEY UPDATE 
-                category_id = VALUES(category_id),
+                category_name = VALUES(category_name),
                 category_url = VALUES(category_url),
-                category_title = VALUES(category_title),
-                created_at = created_at
+                category_description = VALUES(category_description),
+                updated_at = NOW()
             """
             self.cursor.execute(category_sql, (
-                dealid,
-                cat_data.get('category_id', '') or '',
+                category_id,
                 category_name,
                 cat_data.get('category_url', '') or '',
                 cat_data.get('category_title', '') or ''
             ))
+            
+            # Update the deal's category_id to reference this category
+            update_deal_sql = """
+            UPDATE deals 
+            SET category_id = %s 
+            WHERE dealid = %s AND (category_id IS NULL OR category_id = '')
+            """
+            self.cursor.execute(update_deal_sql, (category_id, dealid))
             self.categories_saved += 1
             spider.logger.debug(f"✅ Saved category '{category_name}' for deal {dealid}")
         except mysql.connector.Error as err:
