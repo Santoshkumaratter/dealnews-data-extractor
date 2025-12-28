@@ -20,6 +20,36 @@ class DealnewsSpider(scrapy.Spider):
         self.discovered_categories = set()  # Track discovered category pages
         self.discovered_stores = set()  # Track discovered store pages
         self.category_discovery_enabled = True  # Enable category discovery for 100k+ deals
+        
+        # URL Deduplication System
+        self.scanned_urls = set()
+        self.load_existing_urls()
+
+    def load_existing_urls(self):
+        """Load all existing URLs from database to avoid redundant traffic"""
+        import os
+        import mysql.connector
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        try:
+            conn = mysql.connector.connect(
+                host=os.getenv('MYSQL_HOST', 'localhost'),
+                port=int(os.getenv('MYSQL_PORT', '3306')),
+                user=os.getenv('MYSQL_USER', 'root'),
+                password=os.getenv('MYSQL_PASSWORD', 'root'),
+                database=os.getenv('MYSQL_DATABASE', 'dealnews')
+            )
+            cursor = conn.cursor()
+            cursor.execute("SELECT url FROM deals WHERE url IS NOT NULL")
+            rows = cursor.fetchall()
+            for row in rows:
+                if row[0]:
+                    self.scanned_urls.add(row[0])
+            conn.close()
+            self.logger.info(f"💾 Loaded {len(self.scanned_urls)} existing URLs from database for deduplication.")
+        except Exception as e:
+            self.logger.error(f"⚠️ Failed to load existing URLs from database: {e}")
     
     # Optimized start URLs - pagination + category discovery will handle 100k+ deals
     start_urls = [
@@ -228,8 +258,20 @@ class DealnewsSpider(scrapy.Spider):
                 self.logger.info(f"Reached maximum deals limit: {self.max_deals}")
                 return
             
+            # Extract deal link for deduplication check
+            link = deal.css('::attr(data-offer-url)').get() or deal.css('a::attr(href)').get()
+            if link:
+                try:
+                    link = response.urljoin(link)
+                    if link in self.scanned_urls:
+                        self.logger.debug(f"⏭️ Skipping already scanned URL: {link}")
+                        continue
+                except Exception:
+                    pass  # If urljoin fails, continue with extraction
+
             item = self.extract_deal_item(deal, response)
             if item:
+                self.scanned_urls.add(item.get('url')) # Add to memory set
                 self.deals_extracted += 1
                 yield item
                 
@@ -320,6 +362,13 @@ class DealnewsSpider(scrapy.Spider):
             
             item = self.extract_deal_from_json(deal_data, response)
             if item:
+                # URL deduplication check
+                deal_url = item.get('url')
+                if deal_url in self.scanned_urls:
+                    self.logger.debug(f"⏭️ Skipping already scanned JSON-LD URL: {deal_url}")
+                    continue
+                
+                self.scanned_urls.add(deal_url)
                 self.deals_extracted += 1
                 yield item
                 
@@ -1666,6 +1715,18 @@ class DealnewsSpider(scrapy.Spider):
                 yield related_item
                 related_count += 1
                 self.logger.debug(f"✅ Yielding related deal #{related_count} for {dealid}: {link[:80]}...")
+                
+                # RECURSION: Follow related deal if not already scanned
+                # CRITICAL FIX: Use parse callback (not parse_deal_detail) to actually extract the deal content
+                if link not in self.scanned_urls:
+                    self.logger.info(f"🔄 Recursing into related deal: {link}")
+                    self.scanned_urls.add(link)  # Mark as scanned to avoid re-crawling
+                    yield scrapy.Request(
+                        url=link,
+                        callback=self.parse,  # Changed from parse_deal_detail to parse
+                        errback=self.errback_http,
+                        dont_filter=False
+                    )
         
         if related_count > 0:
             self.logger.info(f"✅ Successfully extracted {related_count} related deals for deal {dealid} from {response.url}")
