@@ -10,6 +10,14 @@ ROBOTSTXT_OBEY = False
 # Fix Scrapy deprecation warning
 REQUEST_FINGERPRINTER_IMPLEMENTATION = '2.7'
 
+# PERFORMANCE OPTIMIZATION: Reduce logging to improve speed
+# Only log warnings and errors to minimize I/O overhead
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'WARNING')  # WARNING, ERROR, or CRITICAL for production
+LOG_ENABLED = True
+LOG_STDOUT = False  # Don't log to stdout, only to file
+LOG_FILE = 'error.log'  # Single log file
+LOG_FILE_APPEND = False  # Overwrite log file on each run to prevent huge files
+
 # OPTIMIZED settings for ULTRA-FAST extraction (15-20 minutes)
 import os
 DOWNLOAD_DELAY = float(os.getenv('DOWNLOAD_DELAY', '0.1'))  # Minimal delay for speed
